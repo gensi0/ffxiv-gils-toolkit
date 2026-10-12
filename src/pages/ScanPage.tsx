@@ -177,6 +177,7 @@ const opportunityColumns = [
   oc.accessor("confidence", {
     header: "Confidence",
     cell: (c) => <ConfidenceBadge value={c.getValue()} />,
+    sortFn: "confidence",
   }),
   oc.accessor("sourceUploadMs", {
     header: "Data age",

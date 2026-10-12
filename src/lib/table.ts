@@ -28,7 +28,16 @@ declare module "@tanstack/react-table" {
 export const tableFeaturesSorted = tableFeatures({
   rowSortingFeature,
   sortedRowModel: createSortedRowModel(),
-  sortFns: { basic: sortFn_basic, alphanumeric: sortFn_alphanumeric },
+  sortFns: {
+    basic: sortFn_basic,
+    alphanumeric: sortFn_alphanumeric,
+    confidence: (rowA, rowB, columnId) => {
+      const RANK: Record<string, number> = { HOT: 0, OK: 1, COMPETITIVE: 2, SATURATED: 3, SLOW: 4 };
+      const a = rowA.getValue<string>(columnId);
+      const b = rowB.getValue<string>(columnId);
+      return (RANK[a] ?? 99) - (RANK[b] ?? 99);
+    },
+  },
 });
 export type Features = typeof tableFeaturesSorted;
 
