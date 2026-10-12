@@ -199,14 +199,22 @@ function OpportunityView({ r }: { r: ScanResults }) {
 
   // Persistent filters & sorting via Zustand store
   const {
-    category, setCategory,
-    selRegions, setSelRegions,
-    selDcs, setSelDcs,
-    selWorlds, setSelWorlds,
-    selConfidence, setSelConfidence,
-    hqOnly, setHqOnly,
-    minProfit, setMinProfit,
-    sorting, setSorting,
+    category,
+    setCategory,
+    selRegions,
+    setSelRegions,
+    selDcs,
+    setSelDcs,
+    selWorlds,
+    setSelWorlds,
+    selConfidence,
+    setSelConfidence,
+    hqOnly,
+    setHqOnly,
+    minProfit,
+    setMinProfit,
+    sorting,
+    setSorting,
   } = useScanFilters();
 
   const [grouped, setGrouped] = useState(false);
@@ -241,14 +249,16 @@ function OpportunityView({ r }: { r: ScanResults }) {
   // Worlds filtered by selected DCs (and regions)
   const availableWorlds = useMemo(() => {
     const all = [...new Set(r.opportunities.map((o) => o.sourceWorld))].sort();
-    if (selDcs.length > 0) return all.filter((w) => {
-      const opp = r.opportunities.find((o) => o.sourceWorld === w);
-      return opp ? selDcs.includes(opp.sourceDc) : false;
-    });
-    if (selRegions.length > 0) return all.filter((w) => {
-      const opp = r.opportunities.find((o) => o.sourceWorld === w);
-      return opp ? selRegions.includes(dcToRegion.get(opp.sourceDc) ?? "Unknown") : false;
-    });
+    if (selDcs.length > 0)
+      return all.filter((w) => {
+        const opp = r.opportunities.find((o) => o.sourceWorld === w);
+        return opp ? selDcs.includes(opp.sourceDc) : false;
+      });
+    if (selRegions.length > 0)
+      return all.filter((w) => {
+        const opp = r.opportunities.find((o) => o.sourceWorld === w);
+        return opp ? selRegions.includes(dcToRegion.get(opp.sourceDc) ?? "Unknown") : false;
+      });
     return all;
   }, [r.opportunities, selDcs, selRegions, dcToRegion]);
 
@@ -271,14 +281,25 @@ function OpportunityView({ r }: { r: ScanResults }) {
       r.opportunities.filter(
         (o) =>
           (category.length === 0 || category.includes(o.item.category ?? "")) &&
-          (selRegions.length === 0 || selRegions.includes(dcToRegion.get(o.sourceDc) ?? "Unknown")) &&
+          (selRegions.length === 0 ||
+            selRegions.includes(dcToRegion.get(o.sourceDc) ?? "Unknown")) &&
           (selDcs.length === 0 || selDcs.includes(o.sourceDc)) &&
           (selWorlds.length === 0 || selWorlds.includes(o.sourceWorld)) &&
           (selConfidence.length === 0 || selConfidence.includes(o.confidence)) &&
           (!hqOnly || o.quality === "HQ") &&
           o.profitPerTrip >= minProfitValue,
       ),
-    [r.opportunities, category, selRegions, selDcs, selWorlds, hqOnly, minProfitValue, dcToRegion],
+    [
+      r.opportunities,
+      category,
+      selRegions,
+      selDcs,
+      selWorlds,
+      selConfidence,
+      hqOnly,
+      minProfitValue,
+      dcToRegion,
+    ],
   );
 
   if (r.opportunities.length === 0) {
@@ -303,21 +324,31 @@ function OpportunityView({ r }: { r: ScanResults }) {
           </span>
         ) : (
           <>
-          <MultiSelect
-            value={category}
-            onChange={setCategory}
-            all="All categories"
-            options={categories}
-          />
-          <MultiSelect
-            value={selRegions}
-            onChange={handleRegionChange}
-            all="All regions"
-            options={regions}
-          />
-          <MultiSelect value={selDcs} onChange={handleDcChange} all="All DCs" options={dcs} />
-            <MultiSelect value={selWorlds} onChange={setSelWorlds} all="All servers" options={availableWorlds} />
-            <MultiSelect value={selConfidence} onChange={setSelConfidence} all="All confidence" options={CONFIDENCE_OPTIONS} />
+            <MultiSelect
+              value={category}
+              onChange={setCategory}
+              all="All categories"
+              options={categories}
+            />
+            <MultiSelect
+              value={selRegions}
+              onChange={handleRegionChange}
+              all="All regions"
+              options={regions}
+            />
+            <MultiSelect value={selDcs} onChange={handleDcChange} all="All DCs" options={dcs} />
+            <MultiSelect
+              value={selWorlds}
+              onChange={setSelWorlds}
+              all="All servers"
+              options={availableWorlds}
+            />
+            <MultiSelect
+              value={selConfidence}
+              onChange={setSelConfidence}
+              all="All confidence"
+              options={CONFIDENCE_OPTIONS}
+            />
             <Input
               placeholder="Min profit / trip"
               inputMode="numeric"
@@ -376,11 +407,7 @@ function MultiSelect({
     onChange(value.includes(opt) ? value.filter((v) => v !== opt) : [...value, opt]);
   };
   const label =
-    value.length === 0
-      ? all
-      : value.length === 1
-        ? value[0]
-        : `${value.length} selected`;
+    value.length === 0 ? all : value.length === 1 ? value[0] : `${value.length} selected`;
 
   return (
     <Popover.Root>
@@ -406,7 +433,9 @@ function MultiSelect({
           {value.length > 0 && (
             <>
               <button
-                onClick={() => onChange([])}
+                onClick={() => {
+                  onChange([]);
+                }}
                 className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
               >
                 Clear selection
@@ -417,7 +446,9 @@ function MultiSelect({
           {options.map((opt) => (
             <button
               key={opt}
-              onClick={() => toggle(opt)}
+              onClick={() => {
+                toggle(opt);
+              }}
               className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-muted"
             >
               <span className="flex size-3.5 shrink-0 items-center justify-center rounded-sm border border-muted-foreground/40">

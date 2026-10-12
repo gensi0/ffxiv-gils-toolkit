@@ -194,7 +194,9 @@ fn conf_label(rank: i64) -> &'static str {
 pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
     // Resolve the latest completed scan — everything else filters on it.
     #[derive(sqlx::FromRow)]
-    struct ScanIdRow { scan_id: String }
+    struct ScanIdRow {
+        scan_id: String,
+    }
 
     let latest: Option<ScanIdRow> = sqlx::query_as(
         "SELECT scan_id FROM scan_runs WHERE status = 'done' ORDER BY started_at DESC LIMIT 1",
@@ -441,12 +443,36 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
     .await?;
 
     let profit_ratio_dist = vec![
-        RatioBucket { lower: 0.0,  label: "< 10%".into(),    count: ratio.b0 },
-        RatioBucket { lower: 0.10, label: "10-25%".into(),   count: ratio.b1 },
-        RatioBucket { lower: 0.25, label: "25-50%".into(),   count: ratio.b2 },
-        RatioBucket { lower: 0.50, label: "50-100%".into(),  count: ratio.b3 },
-        RatioBucket { lower: 1.00, label: "100-200%".into(), count: ratio.b4 },
-        RatioBucket { lower: 2.00, label: "> 200%".into(),   count: ratio.b5 },
+        RatioBucket {
+            lower: 0.0,
+            label: "< 10%".into(),
+            count: ratio.b0,
+        },
+        RatioBucket {
+            lower: 0.10,
+            label: "10-25%".into(),
+            count: ratio.b1,
+        },
+        RatioBucket {
+            lower: 0.25,
+            label: "25-50%".into(),
+            count: ratio.b2,
+        },
+        RatioBucket {
+            lower: 0.50,
+            label: "50-100%".into(),
+            count: ratio.b3,
+        },
+        RatioBucket {
+            lower: 1.00,
+            label: "100-200%".into(),
+            count: ratio.b4,
+        },
+        RatioBucket {
+            lower: 2.00,
+            label: "> 200%".into(),
+            count: ratio.b5,
+        },
     ];
 
     Ok(MarketStats {

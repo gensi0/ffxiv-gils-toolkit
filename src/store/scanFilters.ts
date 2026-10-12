@@ -29,12 +29,28 @@ export const useScanFilters = create<ScanFiltersState>()((set) => ({
   hqOnly: false,
   minProfit: "",
   sorting: [{ id: "dailyProfit", desc: true }],
-  setCategory: (v) => set({ category: v }),
-  setSelRegions: (v) => set({ selRegions: v }),
-  setSelDcs: (v) => set({ selDcs: v }),
-  setSelWorlds: (v) => set({ selWorlds: v }),
-  setSelConfidence: (v) => set({ selConfidence: v }),
-  setHqOnly: (v) => set({ hqOnly: v }),
-  setMinProfit: (v) => set({ minProfit: v }),
-  setSorting: (v) => set({ sorting: v }),
+  setCategory: (v) => {
+    set({ category: v });
+  },
+  setSelRegions: (v) => {
+    set({ selRegions: v });
+  },
+  setSelDcs: (v) => {
+    set({ selDcs: v });
+  },
+  setSelWorlds: (v) => {
+    set({ selWorlds: v });
+  },
+  setSelConfidence: (v) => {
+    set({ selConfidence: v });
+  },
+  setHqOnly: (v) => {
+    set({ hqOnly: v });
+  },
+  setMinProfit: (v) => {
+    set({ minProfit: v });
+  },
+  setSorting: (v) => {
+    set({ sorting: v });
+  },
 }));

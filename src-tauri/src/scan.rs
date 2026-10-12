@@ -980,7 +980,9 @@ async fn prune_old_scans(db: &SqlitePool, keep: i64) {
     let result: Result<(), crate::error::AppError> = async {
         // Collect the IDs to delete (completed scans older than the `keep` newest).
         #[derive(sqlx::FromRow)]
-        struct IdRow { scan_id: String }
+        struct IdRow {
+            scan_id: String,
+        }
 
         let old: Vec<IdRow> = sqlx::query_as(
             "SELECT scan_id FROM scan_runs
@@ -994,13 +996,23 @@ async fn prune_old_scans(db: &SqlitePool, keep: i64) {
 
         for row in old {
             let id = &row.scan_id;
-            sqlx::query("DELETE FROM opportunities    WHERE scan_id = ?").bind(id).execute(db).await?;
-            sqlx::query("DELETE FROM scan_candidates WHERE scan_id = ?").bind(id).execute(db).await?;
-            sqlx::query("DELETE FROM scan_runs        WHERE scan_id = ?").bind(id).execute(db).await?;
+            sqlx::query("DELETE FROM opportunities    WHERE scan_id = ?")
+                .bind(id)
+                .execute(db)
+                .await?;
+            sqlx::query("DELETE FROM scan_candidates WHERE scan_id = ?")
+                .bind(id)
+                .execute(db)
+                .await?;
+            sqlx::query("DELETE FROM scan_runs        WHERE scan_id = ?")
+                .bind(id)
+                .execute(db)
+                .await?;
             tracing::debug!(scan_id = id, "pruned old scan");
         }
         Ok(())
-    }.await;
+    }
+    .await;
 
     if let Err(e) = result {
         tracing::warn!(error = %e, "scan pruning failed (non-fatal)");

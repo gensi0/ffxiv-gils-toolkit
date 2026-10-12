@@ -2,7 +2,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   Line,
   LineChart,
   Pie,
@@ -21,6 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ConfidenceBadge } from "@/components/market";
 import { gil } from "@/lib/format";
 import { useMarketStats } from "@/lib/queries";
+import { errorMessage } from "@/lib/api";
 import type { Confidence, RegionStat } from "@/lib/api";
 
 // ---------- helpers ----------
@@ -54,7 +54,17 @@ function InfoTip({ text }: { text: string }) {
 
 // ---------- stat card ----------
 
-function StatCard({ label, value, sub, tip }: { label: string; value: string; sub?: string; tip?: string }) {
+function StatCard({
+  label,
+  value,
+  sub,
+  tip,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tip?: string;
+}) {
   return (
     <div className="rounded-lg border bg-card p-4">
       <p className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -69,7 +79,15 @@ function StatCard({ label, value, sub, tip }: { label: string; value: string; su
 
 // ---------- section header ----------
 
-function Section({ title, tip, children }: { title: string; tip?: string; children: React.ReactNode }) {
+function Section({
+  title,
+  tip,
+  children,
+}: {
+  title: string;
+  tip?: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="space-y-3">
       <h2 className="flex items-center gap-1.5 text-sm font-semibold tracking-tight text-muted-foreground uppercase">
@@ -99,11 +117,11 @@ export function StatsPage() {
     );
   }
 
-  if (error || !data) {
+  if (error) {
     return (
       <>
         <PageHeader title="Stats" />
-        <EmptyState message={error ? String(error) : "No scan data yet. Run a scan first."} />
+        <EmptyState message={errorMessage(error)} />
       </>
     );
   }
@@ -114,7 +132,6 @@ export function StatsPage() {
     <>
       <PageHeader title="Stats" />
       <div className="space-y-8 overflow-y-auto p-4">
-
         {/* ── Overview ── */}
         <Section title="Overview">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -184,7 +201,9 @@ export function StatsPage() {
                       fontSize: 11,
                     }}
                     formatter={(value: unknown, name: unknown) =>
-                      name === "profit" ? [`${value as number}k g/day`, "Daily profit"] : [`${value as number}`, "Opps"]
+                      name === "profit"
+                        ? [`${value as number}k g/day`, "Daily profit"]
+                        : [`${value as number}`, "Opps"]
                     }
                   />
                   <Line
@@ -219,7 +238,10 @@ export function StatsPage() {
             tip="Classement des mondes sources par profit journalier cumulé sur tous tes scans. Un monde en tête = il a régulièrement des prix bas sur des items que tu peux revendre chez toi."
           >
             <div className="rounded-lg border bg-card p-3">
-              <ResponsiveContainer width="100%" height={Math.max(160, data.worldRankings.slice(0, 15).length * 24)}>
+              <ResponsiveContainer
+                width="100%"
+                height={Math.max(160, data.worldRankings.slice(0, 15).length * 24)}
+              >
                 <BarChart
                   layout="vertical"
                   data={data.worldRankings.slice(0, 15).map((w) => ({
@@ -227,10 +249,15 @@ export function StatsPage() {
                     profit: Math.round(w.totalDailyProfit / 1000),
                     gap: Math.round(w.avgGapPct),
                     conf: w.bestConfidence,
+                    fill: CONF_COLOR[w.bestConfidence],
                   }))}
                   margin={{ left: 100, right: 40, top: 4, bottom: 4 }}
                 >
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <CartesianGrid
+                    horizontal={false}
+                    strokeDasharray="3 3"
+                    stroke="hsl(var(--border))"
+                  />
                   <XAxis
                     type="number"
                     tickFormatter={(v: number) => `${v}k`}
@@ -250,18 +277,12 @@ export function StatsPage() {
                       fontSize: 11,
                     }}
                     formatter={(v: unknown, name: unknown) =>
-                      name === "profit" ? [`${v}k gil/day`, "Total profit"] : [`${v}%`, "Avg gap"]
+                      name === "profit"
+                        ? [`${String(v)}k gil/day`, "Total profit"]
+                        : [`${String(v)}%`, "Avg gap"]
                     }
                   />
-                  <Bar dataKey="profit" radius={[0, 3, 3, 0]}>
-                    {data.worldRankings.slice(0, 15).map((w, i) => (
-                      <Cell
-                        key={i}
-                        fill={CONF_COLOR[w.bestConfidence as Confidence] ?? "#3b82f6"}
-                        fillOpacity={0.8}
-                      />
-                    ))}
-                  </Bar>
+                  <Bar dataKey="profit" radius={[0, 3, 3, 0]} fillOpacity={0.8} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -274,19 +295,19 @@ export function StatsPage() {
                     <th className="px-3 py-2 text-left font-medium">World</th>
                     <th className="px-3 py-2 text-left font-medium">DC</th>
                     <th className="px-3 py-2 text-right font-medium">
-                      <span className="inline-flex items-center gap-1 justify-end">
+                      <span className="inline-flex items-center justify-end gap-1">
                         Opps
                         <InfoTip text="Nombre total d'opportunités sourcées depuis ce monde sur l'ensemble des scans." />
                       </span>
                     </th>
                     <th className="px-3 py-2 text-right font-medium">
-                      <span className="inline-flex items-center gap-1 justify-end">
+                      <span className="inline-flex items-center justify-end gap-1">
                         Avg gap
                         <InfoTip text="Écart moyen entre le prix d'achat sur ce monde et le prix médian chez toi, exprimé en % du prix maison. +50% = tu achètes en moyenne 50% moins cher que le médian chez toi." />
                       </span>
                     </th>
                     <th className="px-3 py-2 text-right font-medium">
-                      <span className="inline-flex items-center gap-1 justify-end">
+                      <span className="inline-flex items-center justify-end gap-1">
                         Gil/day
                         <InfoTip text="Somme des profits journaliers estimés pour toutes les opportunités de ce monde, cumulées sur tous les scans." />
                       </span>
@@ -305,7 +326,7 @@ export function StatsPage() {
                       <td className="px-3 py-1.5 font-medium">{w.worldName}</td>
                       <td className="px-3 py-1.5 text-muted-foreground">{w.dc}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{w.totalOpps}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums text-emerald-500">
+                      <td className="px-3 py-1.5 text-right text-emerald-500 tabular-nums">
                         +{w.avgGapPct.toFixed(0)}%
                       </td>
                       <td className="px-3 py-1.5 text-right tabular-nums">
@@ -330,14 +351,14 @@ export function StatsPage() {
           >
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {data.dcRankings.map((dc) => (
-                <div key={dc.dc} className="rounded-lg border bg-card p-3 space-y-1">
+                <div key={dc.dc} className="space-y-1 rounded-lg border bg-card p-3">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold">{dc.dc}</span>
                     <Badge variant="outline" className="text-[10px]">
                       {dc.worldCount} worlds
                     </Badge>
                   </div>
-                  <p className="text-xl font-semibold tabular-nums text-amber-500">
+                  <p className="text-xl font-semibold text-amber-500 tabular-nums">
                     {gil(dc.totalDailyProfit)}
                     <span className="text-xs font-normal text-muted-foreground"> gil/day</span>
                   </p>
@@ -359,15 +380,19 @@ export function StatsPage() {
           >
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {data.regionRankings.map((r: RegionStat) => (
-                <div key={r.region} className="rounded-lg border bg-card p-3 space-y-1">
+                <div key={r.region} className="space-y-1 rounded-lg border bg-card p-3">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold">{r.region}</span>
                     <div className="flex gap-1">
-                      <Badge variant="outline" className="text-[10px]">{r.dcCount} DC</Badge>
-                      <Badge variant="outline" className="text-[10px]">{r.worldCount} W</Badge>
+                      <Badge variant="outline" className="text-[10px]">
+                        {r.dcCount} DC
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px]">
+                        {r.worldCount} W
+                      </Badge>
                     </div>
                   </div>
-                  <p className="text-xl font-semibold tabular-nums text-amber-500">
+                  <p className="text-xl font-semibold text-amber-500 tabular-nums">
                     {gil(r.totalDailyProfit)}
                     <span className="text-xs font-normal text-muted-foreground"> gil/day</span>
                   </p>
@@ -383,7 +408,6 @@ export function StatsPage() {
 
         {/* ── Confidence + ratio distributions ── */}
         <div className="grid gap-6 md:grid-cols-2">
-
           {data.confidenceDist.length > 0 && (
             <Section
               title="Opportunity confidence distribution"
@@ -393,24 +417,17 @@ export function StatsPage() {
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie
-                      data={data.confidenceDist}
+                      data={data.confidenceDist.map((c) => ({ ...c, fill: CONF_COLOR[c.label] }))}
                       dataKey="count"
                       nameKey="label"
                       cx="50%"
                       cy="50%"
                       outerRadius={70}
                       label={(props: PieLabelRenderProps) =>
-                        `${String(props.name ?? "")} ${((props.percent ?? 0) * 100).toFixed(0)}%`
+                        `${props.name ?? ""} ${((props.percent ?? 0) * 100).toFixed(0)}%`
                       }
                       labelLine={false}
-                    >
-                      {data.confidenceDist.map((c, i) => (
-                        <Cell
-                          key={i}
-                          fill={CONF_COLOR[c.label as Confidence] ?? "#6b7280"}
-                        />
-                      ))}
-                    </Pie>
+                    ></Pie>
                     <ChartTooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
@@ -472,19 +489,19 @@ export function StatsPage() {
                   <tr className="border-b bg-muted/30 text-muted-foreground">
                     <th className="px-3 py-2 text-left font-medium">Item</th>
                     <th className="px-3 py-2 text-right font-medium">
-                      <span className="inline-flex items-center gap-1 justify-end">
+                      <span className="inline-flex items-center justify-end gap-1">
                         Scans
                         <InfoTip text="Nombre de scans distincts où cet item est apparu comme opportunité rentable." />
                       </span>
                     </th>
                     <th className="px-3 py-2 text-right font-medium">
-                      <span className="inline-flex items-center gap-1 justify-end">
+                      <span className="inline-flex items-center justify-end gap-1">
                         Avg profit/unit
                         <InfoTip text="Profit moyen par unité achetée = prix de vente estimé chez toi − coût d'achat − taxes vendeur." />
                       </span>
                     </th>
                     <th className="px-3 py-2 text-right font-medium">
-                      <span className="inline-flex items-center gap-1 justify-end">
+                      <span className="inline-flex items-center justify-end gap-1">
                         Best gil/day
                         <InfoTip text="Meilleur profit journalier estimé observé pour cet item sur un seul scan (profit/unité × unités vendues par jour)." />
                       </span>
@@ -496,10 +513,12 @@ export function StatsPage() {
                   {data.topItems.map((item) => (
                     <tr key={item.itemId} className="border-b last:border-0 hover:bg-muted/20">
                       <td className="px-3 py-1.5 font-medium">
-                        {item.name || <span className="text-muted-foreground">Item #{item.itemId}</span>}
+                        {item.name || (
+                          <span className="text-muted-foreground">Item #{item.itemId}</span>
+                        )}
                       </td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{item.scanCount}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums text-emerald-500">
+                      <td className="px-3 py-1.5 text-right text-emerald-500 tabular-nums">
                         {gil(Math.round(item.avgUnitProfit))}
                       </td>
                       <td className="px-3 py-1.5 text-right tabular-nums">
@@ -515,7 +534,6 @@ export function StatsPage() {
             </div>
           </Section>
         )}
-
       </div>
     </>
   );
