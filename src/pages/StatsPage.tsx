@@ -9,13 +9,15 @@ import {
   PieChart,
   type PieLabelRenderProps,
   ResponsiveContainer,
-  Tooltip,
+  Tooltip as ChartTooltip,
   XAxis,
   YAxis,
 } from "recharts";
+import { InfoIcon } from "lucide-react";
 import { EmptyState, PageHeader } from "@/components/Page";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ConfidenceBadge } from "@/components/market";
 import { gil } from "@/lib/format";
 import { useMarketStats } from "@/lib/queries";
@@ -35,12 +37,30 @@ function ConfBadge({ label }: { label: string }) {
   return <ConfidenceBadge value={label as Confidence} />;
 }
 
+// ---------- info tooltip ----------
+
+function InfoTip({ text }: { text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <InfoIcon className="inline-block size-3 cursor-help text-muted-foreground/60 hover:text-muted-foreground" />
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-56 text-center leading-snug">
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 // ---------- stat card ----------
 
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function StatCard({ label, value, sub, tip }: { label: string; value: string; sub?: string; tip?: string }) {
   return (
     <div className="rounded-lg border bg-card p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+        {label}
+        {tip && <InfoTip text={tip} />}
+      </p>
       <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
       {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
@@ -49,11 +69,12 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 
 // ---------- section header ----------
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, tip, children }: { title: string; tip?: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-semibold tracking-tight text-muted-foreground uppercase">
+      <h2 className="flex items-center gap-1.5 text-sm font-semibold tracking-tight text-muted-foreground uppercase">
         {title}
+        {tip && <InfoTip text={tip} />}
       </h2>
       {children}
     </section>
@@ -97,27 +118,37 @@ export function StatsPage() {
         {/* ── Overview ── */}
         <Section title="Overview">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatCard label="Total scans" value={data.totalScans.toString()} />
+            <StatCard
+              label="Total scans"
+              value={data.totalScans.toString()}
+              tip="Nombre de scans complétés depuis le premier lancement."
+            />
             <StatCard
               label="Total opportunities"
               value={data.totalOpportunities.toLocaleString()}
               sub={`~${data.avgOppsPerScan.toFixed(1)} per scan`}
+              tip="Nombre total d'opportunités d'arbitrage trouvées sur tous tes scans. Une opportunité = un item moins cher sur un autre monde que chez toi."
             />
             <StatCard
               label="Best scan (gil/day)"
               value={gil(data.bestScanDailyProfit)}
               sub="single scan total"
+              tip="Meilleur scan en valeur totale : somme des profits journaliers estimés de toutes les opportunités trouvées dans ce scan."
             />
             <StatCard
               label="Unique worlds sourced"
               value={data.worldRankings.length.toString()}
+              tip="Nombre de mondes distincts qui ont produit au moins une opportunité d'achat sur l'ensemble de tes scans."
             />
           </div>
         </Section>
 
         {/* ── Scan history ── */}
         {hasHistory && (
-          <Section title="Scan history — opportunities over time">
+          <Section
+            title="Scan history — opportunities over time"
+            tip="Évolution de tes scans dans le temps. Bleu = nb d'opportunités trouvées, orange = profit journalier total estimé (en milliers de gils)."
+          >
             <div className="rounded-lg border bg-card p-3">
               <ResponsiveContainer width="100%" height={160}>
                 <LineChart
@@ -145,7 +176,7 @@ export function StatsPage() {
                     tickFormatter={(v: number) => `${v}k`}
                     tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                   />
-                  <Tooltip
+                  <ChartTooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
                       border: "1px solid hsl(var(--border))",
@@ -183,7 +214,10 @@ export function StatsPage() {
 
         {/* ── World rankings ── */}
         {data.worldRankings.length > 0 && (
-          <Section title="Best source worlds (by total gil/day across all scans)">
+          <Section
+            title="Best source worlds (by total gil/day across all scans)"
+            tip="Classement des mondes sources par profit journalier cumulé sur tous tes scans. Un monde en tête = il a régulièrement des prix bas sur des items que tu peux revendre chez toi."
+          >
             <div className="rounded-lg border bg-card p-3">
               <ResponsiveContainer width="100%" height={Math.max(160, data.worldRankings.slice(0, 15).length * 24)}>
                 <BarChart
@@ -208,7 +242,7 @@ export function StatsPage() {
                     width={96}
                     tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                   />
-                  <Tooltip
+                  <ChartTooltip
                     contentStyle={{
                       backgroundColor: "hsl(var(--card))",
                       border: "1px solid hsl(var(--border))",
@@ -239,10 +273,30 @@ export function StatsPage() {
                   <tr className="border-b bg-muted/30 text-muted-foreground">
                     <th className="px-3 py-2 text-left font-medium">World</th>
                     <th className="px-3 py-2 text-left font-medium">DC</th>
-                    <th className="px-3 py-2 text-right font-medium">Opps</th>
-                    <th className="px-3 py-2 text-right font-medium">Avg gap</th>
-                    <th className="px-3 py-2 text-right font-medium">Gil/day</th>
-                    <th className="px-3 py-2 text-left font-medium">Best</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        Opps
+                        <InfoTip text="Nombre total d'opportunités sourcées depuis ce monde sur l'ensemble des scans." />
+                      </span>
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        Avg gap
+                        <InfoTip text="Écart moyen entre le prix d'achat sur ce monde et le prix médian chez toi, exprimé en % du prix maison. +50% = tu achètes en moyenne 50% moins cher que le médian chez toi." />
+                      </span>
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        Gil/day
+                        <InfoTip text="Somme des profits journaliers estimés pour toutes les opportunités de ce monde, cumulées sur tous les scans." />
+                      </span>
+                    </th>
+                    <th className="px-3 py-2 text-left font-medium">
+                      <span className="inline-flex items-center gap-1">
+                        Best
+                        <InfoTip text="Meilleur niveau de confiance observé : HOT = demande très forte, OK = demande correcte, COMPETITIVE = marché disputé, SATURATED = offre > demande, SLOW = vente lente." />
+                      </span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -270,7 +324,10 @@ export function StatsPage() {
 
         {/* ── DC rankings ── */}
         {data.dcRankings.length > 0 && (
-          <Section title="Data center comparison">
+          <Section
+            title="Data center comparison"
+            tip="Comparaison des datacenters par profit total disponible. Utile pour savoir sur quel DC concentrer tes trips."
+          >
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {data.dcRankings.map((dc) => (
                 <div key={dc.dc} className="rounded-lg border bg-card p-3 space-y-1">
@@ -298,7 +355,10 @@ export function StatsPage() {
         <div className="grid gap-6 md:grid-cols-2">
 
           {data.confidenceDist.length > 0 && (
-            <Section title="Opportunity confidence distribution">
+            <Section
+              title="Opportunity confidence distribution"
+              tip="Répartition de tes opportunités par niveau de confiance. HOT = item très demandé (vente < 1j), OK = demande correcte, COMPETITIVE = beaucoup de vendeurs, SATURATED = offre > demande, SLOW = vente incertaine."
+            >
               <div className="rounded-lg border bg-card p-3">
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
@@ -321,7 +381,7 @@ export function StatsPage() {
                         />
                       ))}
                     </Pie>
-                    <Tooltip
+                    <ChartTooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
                         border: "1px solid hsl(var(--border))",
@@ -337,7 +397,10 @@ export function StatsPage() {
           )}
 
           {data.profitRatioDist.length > 0 && (
-            <Section title="Price gap distribution (unit profit / home median)">
+            <Section
+              title="Price gap distribution (unit profit / home median)"
+              tip="Distribution des opportunités selon l'écart de prix relatif. Une barre haute à droite = beaucoup d'items très bon marché ailleurs. Idéal pour identifier si ton marché est globalement cher ou compétitif."
+            >
               <div className="rounded-lg border bg-card p-3">
                 <ResponsiveContainer width="100%" height={180}>
                   <BarChart
@@ -350,7 +413,7 @@ export function StatsPage() {
                       tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
                     />
                     <YAxis tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
-                    <Tooltip
+                    <ChartTooltip
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
                         border: "1px solid hsl(var(--border))",
@@ -369,15 +432,33 @@ export function StatsPage() {
 
         {/* ── Top items ── */}
         {data.topItems.length > 0 && (
-          <Section title="Most recurring arbitrage items">
+          <Section
+            title="Most recurring arbitrage items"
+            tip="Items qui apparaissent le plus souvent comme opportunités d'arbitrage sur tes scans. Un item récurrent = bonne cible pour la watchlist."
+          >
             <div className="rounded-lg border">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b bg-muted/30 text-muted-foreground">
                     <th className="px-3 py-2 text-left font-medium">Item</th>
-                    <th className="px-3 py-2 text-right font-medium">Scans</th>
-                    <th className="px-3 py-2 text-right font-medium">Avg profit/unit</th>
-                    <th className="px-3 py-2 text-right font-medium">Best gil/day</th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        Scans
+                        <InfoTip text="Nombre de scans distincts où cet item est apparu comme opportunité rentable." />
+                      </span>
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        Avg profit/unit
+                        <InfoTip text="Profit moyen par unité achetée = prix de vente estimé chez toi − coût d'achat − taxes vendeur." />
+                      </span>
+                    </th>
+                    <th className="px-3 py-2 text-right font-medium">
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        Best gil/day
+                        <InfoTip text="Meilleur profit journalier estimé observé pour cet item sur un seul scan (profit/unité × unités vendues par jour)." />
+                      </span>
+                    </th>
                     <th className="px-3 py-2 text-left font-medium">Confidence</th>
                   </tr>
                 </thead>
