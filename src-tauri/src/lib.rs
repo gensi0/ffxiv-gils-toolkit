@@ -10,6 +10,7 @@ mod results;
 mod scan;
 mod scope;
 mod settings;
+mod stats;
 mod universalis;
 mod watch;
 mod worlds;
@@ -208,6 +209,7 @@ pub fn run() {
             commands::watchlist_remove,
             commands::watchlist_set_threshold,
             commands::ws_status,
+            commands::market_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

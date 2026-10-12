@@ -13,6 +13,7 @@ import { WatchlistPage } from "@/pages/WatchlistPage";
 import { ScanPage } from "@/pages/ScanPage";
 import { SearchPage } from "@/pages/SearchPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { StatsPage } from "@/pages/StatsPage";
 
 const PAGES: Record<Page, React.ComponentType> = {
   dashboard: DashboardPage,
@@ -20,6 +21,7 @@ const PAGES: Record<Page, React.ComponentType> = {
   watchlist: WatchlistPage,
   search: SearchPage,
   history: HistoryPage,
+  stats: StatsPage,
   settings: SettingsPage,
   item: ItemPage,
 };

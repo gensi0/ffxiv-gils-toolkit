@@ -1,0 +1,411 @@
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  type PieLabelRenderProps,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { EmptyState, PageHeader } from "@/components/Page";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { ConfidenceBadge } from "@/components/market";
+import { gil } from "@/lib/format";
+import { useMarketStats } from "@/lib/queries";
+import type { Confidence } from "@/lib/api";
+
+// ---------- helpers ----------
+
+const CONF_COLOR: Record<Confidence, string> = {
+  HOT: "#f97316",
+  OK: "#22c55e",
+  COMPETITIVE: "#3b82f6",
+  SATURATED: "#a855f7",
+  SLOW: "#6b7280",
+};
+
+function ConfBadge({ label }: { label: string }) {
+  return <ConfidenceBadge value={label as Confidence} />;
+}
+
+// ---------- stat card ----------
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+// ---------- section header ----------
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-semibold tracking-tight text-muted-foreground uppercase">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+// ---------- main page ----------
+
+export function StatsPage() {
+  const { data, isPending, error } = useMarketStats();
+
+  if (isPending) {
+    return (
+      <>
+        <PageHeader title="Stats" />
+        <div className="space-y-4 p-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 w-full" />
+          ))}
+        </div>
+      </>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <>
+        <PageHeader title="Stats" />
+        <EmptyState message={error ? String(error) : "No scan data yet. Run a scan first."} />
+      </>
+    );
+  }
+
+  const hasHistory = data.scanHistory.length > 0;
+
+  return (
+    <>
+      <PageHeader title="Stats" />
+      <div className="space-y-8 overflow-y-auto p-4">
+
+        {/* ── Overview ── */}
+        <Section title="Overview">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard label="Total scans" value={data.totalScans.toString()} />
+            <StatCard
+              label="Total opportunities"
+              value={data.totalOpportunities.toLocaleString()}
+              sub={`~${data.avgOppsPerScan.toFixed(1)} per scan`}
+            />
+            <StatCard
+              label="Best scan (gil/day)"
+              value={gil(data.bestScanDailyProfit)}
+              sub="single scan total"
+            />
+            <StatCard
+              label="Unique worlds sourced"
+              value={data.worldRankings.length.toString()}
+            />
+          </div>
+        </Section>
+
+        {/* ── Scan history ── */}
+        {hasHistory && (
+          <Section title="Scan history — opportunities over time">
+            <div className="rounded-lg border bg-card p-3">
+              <ResponsiveContainer width="100%" height={160}>
+                <LineChart
+                  data={data.scanHistory.map((p) => ({
+                    date: new Date(p.startedAt).toLocaleDateString("fr", {
+                      month: "2-digit",
+                      day: "2-digit",
+                    }),
+                    opps: p.opportunitiesFound,
+                    profit: Math.round(p.totalDailyProfit / 1000),
+                  }))}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  />
+                  <YAxis
+                    yAxisId="opps"
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  />
+                  <YAxis
+                    yAxisId="profit"
+                    orientation="right"
+                    tickFormatter={(v: number) => `${v}k`}
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "6px",
+                      fontSize: 11,
+                    }}
+                    formatter={(value: unknown, name: unknown) =>
+                      name === "profit" ? [`${value as number}k g/day`, "Daily profit"] : [`${value as number}`, "Opps"]
+                    }
+                  />
+                  <Line
+                    yAxisId="opps"
+                    type="monotone"
+                    dataKey="opps"
+                    stroke="#3b82f6"
+                    strokeWidth={1.5}
+                    dot={false}
+                  />
+                  <Line
+                    yAxisId="profit"
+                    type="monotone"
+                    dataKey="profit"
+                    stroke="#f97316"
+                    strokeWidth={1.5}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <p className="mt-1 text-center text-[10px] text-muted-foreground">
+                Blue = opportunities · Orange = total gil/day (k)
+              </p>
+            </div>
+          </Section>
+        )}
+
+        {/* ── World rankings ── */}
+        {data.worldRankings.length > 0 && (
+          <Section title="Best source worlds (by total gil/day across all scans)">
+            <div className="rounded-lg border bg-card p-3">
+              <ResponsiveContainer width="100%" height={Math.max(160, data.worldRankings.slice(0, 15).length * 24)}>
+                <BarChart
+                  layout="vertical"
+                  data={data.worldRankings.slice(0, 15).map((w) => ({
+                    name: `${w.worldName} (${w.dc})`,
+                    profit: Math.round(w.totalDailyProfit / 1000),
+                    gap: Math.round(w.avgGapPct),
+                    conf: w.bestConfidence,
+                  }))}
+                  margin={{ left: 100, right: 40, top: 4, bottom: 4 }}
+                >
+                  <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis
+                    type="number"
+                    tickFormatter={(v: number) => `${v}k`}
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={96}
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "6px",
+                      fontSize: 11,
+                    }}
+                    formatter={(v: unknown, name: unknown) =>
+                      name === "profit" ? [`${v}k gil/day`, "Total profit"] : [`${v}%`, "Avg gap"]
+                    }
+                  />
+                  <Bar dataKey="profit" radius={[0, 3, 3, 0]}>
+                    {data.worldRankings.slice(0, 15).map((w, i) => (
+                      <Cell
+                        key={i}
+                        fill={CONF_COLOR[w.bestConfidence as Confidence] ?? "#3b82f6"}
+                        fillOpacity={0.8}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* World table */}
+            <div className="rounded-lg border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b bg-muted/30 text-muted-foreground">
+                    <th className="px-3 py-2 text-left font-medium">World</th>
+                    <th className="px-3 py-2 text-left font-medium">DC</th>
+                    <th className="px-3 py-2 text-right font-medium">Opps</th>
+                    <th className="px-3 py-2 text-right font-medium">Avg gap</th>
+                    <th className="px-3 py-2 text-right font-medium">Gil/day</th>
+                    <th className="px-3 py-2 text-left font-medium">Best</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.worldRankings.slice(0, 15).map((w) => (
+                    <tr key={w.worldId} className="border-b last:border-0 hover:bg-muted/20">
+                      <td className="px-3 py-1.5 font-medium">{w.worldName}</td>
+                      <td className="px-3 py-1.5 text-muted-foreground">{w.dc}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">{w.totalOpps}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-emerald-500">
+                        +{w.avgGapPct.toFixed(0)}%
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {gil(w.totalDailyProfit)}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <ConfBadge label={w.bestConfidence} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+        )}
+
+        {/* ── DC rankings ── */}
+        {data.dcRankings.length > 0 && (
+          <Section title="Data center comparison">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {data.dcRankings.map((dc) => (
+                <div key={dc.dc} className="rounded-lg border bg-card p-3 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">{dc.dc}</span>
+                    <Badge variant="outline" className="text-[10px]">
+                      {dc.worldCount} worlds
+                    </Badge>
+                  </div>
+                  <p className="text-xl font-semibold tabular-nums text-amber-500">
+                    {gil(dc.totalDailyProfit)}
+                    <span className="text-xs font-normal text-muted-foreground"> gil/day</span>
+                  </p>
+                  <div className="flex gap-3 text-xs text-muted-foreground">
+                    <span>{dc.totalOpps.toLocaleString()} opps</span>
+                    <span className="text-emerald-500">+{dc.avgGapPct.toFixed(0)}% avg gap</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* ── Confidence + ratio distributions ── */}
+        <div className="grid gap-6 md:grid-cols-2">
+
+          {data.confidenceDist.length > 0 && (
+            <Section title="Opportunity confidence distribution">
+              <div className="rounded-lg border bg-card p-3">
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={data.confidenceDist}
+                      dataKey="count"
+                      nameKey="label"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={70}
+                      label={(props: PieLabelRenderProps) =>
+                        `${String(props.name ?? "")} ${((props.percent ?? 0) * 100).toFixed(0)}%`
+                      }
+                      labelLine={false}
+                    >
+                      {data.confidenceDist.map((c, i) => (
+                        <Cell
+                          key={i}
+                          fill={CONF_COLOR[c.label as Confidence] ?? "#6b7280"}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "6px",
+                        fontSize: 11,
+                      }}
+                      formatter={(v: unknown) => [(v as number).toLocaleString(), "count"]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </Section>
+          )}
+
+          {data.profitRatioDist.length > 0 && (
+            <Section title="Price gap distribution (unit profit / home median)">
+              <div className="rounded-lg border bg-card p-3">
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart
+                    data={data.profitRatioDist}
+                    margin={{ top: 4, right: 8, bottom: 4, left: 8 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }}
+                    />
+                    <YAxis tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "6px",
+                        fontSize: 11,
+                      }}
+                      formatter={(v: unknown) => [(v as number).toLocaleString(), "opportunities"]}
+                    />
+                    <Bar dataKey="count" fill="#3b82f6" fillOpacity={0.8} radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Section>
+          )}
+        </div>
+
+        {/* ── Top items ── */}
+        {data.topItems.length > 0 && (
+          <Section title="Most recurring arbitrage items">
+            <div className="rounded-lg border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b bg-muted/30 text-muted-foreground">
+                    <th className="px-3 py-2 text-left font-medium">Item</th>
+                    <th className="px-3 py-2 text-right font-medium">Scans</th>
+                    <th className="px-3 py-2 text-right font-medium">Avg profit/unit</th>
+                    <th className="px-3 py-2 text-right font-medium">Best gil/day</th>
+                    <th className="px-3 py-2 text-left font-medium">Confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.topItems.map((item) => (
+                    <tr key={item.itemId} className="border-b last:border-0 hover:bg-muted/20">
+                      <td className="px-3 py-1.5 font-medium">
+                        {item.name || <span className="text-muted-foreground">Item #{item.itemId}</span>}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">{item.scanCount}</td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-emerald-500">
+                        {gil(Math.round(item.avgUnitProfit))}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {gil(item.maxDailyProfit)}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <ConfBadge label={item.bestConfidence} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+        )}
+
+      </div>
+    </>
+  );
+}

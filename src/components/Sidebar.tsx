@@ -6,6 +6,7 @@ import {
   SearchIcon,
   SettingsIcon,
   StarIcon,
+  BarChart2Icon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Page, useNav } from "@/store/nav";
@@ -16,6 +17,7 @@ const ITEMS: { page: Page; label: string; icon: LucideIcon }[] = [
   { page: "watchlist", label: "Watchlist", icon: StarIcon },
   { page: "search", label: "Search", icon: SearchIcon },
   { page: "history", label: "History", icon: HistoryIcon },
+  { page: "stats", label: "Stats", icon: BarChart2Icon },
 ];
 
 function NavButton({ page, label, icon: Icon }: { page: Page; label: string; icon: LucideIcon }) {

@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import {
   api,
   EVENTS,
+  type MarketStats,
   type NetStatus,
   type ScanProgress,
   type Settings,
@@ -143,3 +144,10 @@ export function useSetWatchThreshold() {
     },
   });
 }
+
+export const useMarketStats = () =>
+  useQuery<MarketStats>({
+    queryKey: ["market-stats"],
+    queryFn: api.marketStats,
+    staleTime: 5 * 60_000,
+  });
