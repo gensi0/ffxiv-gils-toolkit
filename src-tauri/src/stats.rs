@@ -192,6 +192,35 @@ fn conf_label(rank: i64) -> &'static str {
 // ---------- main query ----------
 
 pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
+    // Resolve the latest completed scan — everything else filters on it.
+    #[derive(sqlx::FromRow)]
+    struct ScanIdRow { scan_id: String }
+
+    let latest: Option<ScanIdRow> = sqlx::query_as(
+        "SELECT scan_id FROM scan_runs WHERE status = 'done' ORDER BY started_at DESC LIMIT 1",
+    )
+    .fetch_optional(db)
+    .await?;
+
+    let Some(latest) = latest else {
+        // No completed scan yet — return empty stats.
+        return Ok(MarketStats {
+            total_scans: 0,
+            total_opportunities: 0,
+            best_scan_daily_profit: 0,
+            avg_opps_per_scan: 0.0,
+            world_rankings: vec![],
+            dc_rankings: vec![],
+            region_rankings: vec![],
+            confidence_dist: vec![],
+            top_items: vec![],
+            scan_history: vec![],
+            profit_ratio_dist: vec![],
+        });
+    };
+    let scan_id = &latest.scan_id;
+
+    // Total completed scans (context only — all rankings filter on scan_id).
     let summary: SummaryRow = sqlx::query_as(
         "SELECT COUNT(*) AS total_scans,
                 COALESCE(SUM(opportunities_found), 0) AS total_opps,
@@ -202,14 +231,11 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
     .fetch_one(db)
     .await?;
 
+    // Last scan total daily profit (= best, since we only look at the last scan).
     let best_scan: Option<BestScanRow> = sqlx::query_as(
-        "SELECT COALESCE(SUM(o.daily_profit), 0) AS total
-         FROM opportunities o
-         JOIN scan_runs r ON r.scan_id = o.scan_id
-         WHERE r.status = 'done'
-         GROUP BY o.scan_id
-         ORDER BY total DESC LIMIT 1",
+        "SELECT COALESCE(SUM(daily_profit), 0) AS total FROM opportunities WHERE scan_id = ?",
     )
+    .bind(scan_id)
     .fetch_optional(db)
     .await?;
     let best_scan_daily_profit = best_scan.map(|r| r.total).unwrap_or(0);
@@ -230,10 +256,12 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
                     ELSE 0 END), 0) AS conf_rank
          FROM opportunities o
          LEFT JOIN worlds w ON w.world_id = o.source_world_id
+         WHERE o.scan_id = ?
          GROUP BY o.source_world_id
          ORDER BY total_daily_profit DESC
          LIMIT 30",
     )
+    .bind(scan_id)
     .fetch_all(db)
     .await?;
 
@@ -261,9 +289,11 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
                          ELSE NULL END), 0.0) AS avg_gap_pct
          FROM opportunities o
          LEFT JOIN worlds w ON w.world_id = o.source_world_id
+         WHERE o.scan_id = ?
          GROUP BY dc
          ORDER BY total_daily_profit DESC",
     )
+    .bind(scan_id)
     .fetch_all(db)
     .await?;
 
@@ -290,9 +320,11 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
                          ELSE NULL END), 0.0) AS avg_gap_pct
          FROM opportunities o
          LEFT JOIN worlds w ON w.world_id = o.source_world_id
+         WHERE o.scan_id = ?
          GROUP BY region
          ORDER BY total_daily_profit DESC",
     )
+    .bind(scan_id)
     .fetch_all(db)
     .await?;
 
@@ -313,9 +345,11 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
                 COUNT(*) AS count,
                 COALESCE(SUM(daily_profit), 0) AS total_daily_profit
          FROM opportunities
+         WHERE scan_id = ?
          GROUP BY confidence
          ORDER BY count DESC",
     )
+    .bind(scan_id)
     .fetch_all(db)
     .await?;
 
@@ -340,10 +374,12 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
                     ELSE 0 END), 0) AS conf_rank
          FROM opportunities o
          LEFT JOIN items xi ON xi.item_id = o.item_id
+         WHERE o.scan_id = ?
          GROUP BY o.item_id
-         ORDER BY scan_count DESC, avg_unit_profit DESC
+         ORDER BY avg_unit_profit DESC
          LIMIT 20",
     )
+    .bind(scan_id)
     .fetch_all(db)
     .await?;
 
@@ -398,8 +434,9 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
                AND CAST(unit_profit AS REAL)/home_median_price BETWEEN 1.00 AND 1.999 THEN 1 ELSE 0 END), 0) AS b4,
            COALESCE(SUM(CASE WHEN home_median_price > 0
                AND CAST(unit_profit AS REAL)/home_median_price >= 2.00 THEN 1 ELSE 0 END), 0) AS b5
-         FROM opportunities",
+         FROM opportunities WHERE scan_id = ?",
     )
+    .bind(scan_id)
     .fetch_one(db)
     .await?;
 
