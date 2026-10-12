@@ -197,6 +197,7 @@ pub fn run() {
             commands::search_items,
             commands::item_detail,
             commands::start_scan,
+            commands::retry_failed_scan,
             commands::cancel_scan,
             commands::scan_progress,
             commands::list_scans,

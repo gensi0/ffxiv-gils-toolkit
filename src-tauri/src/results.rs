@@ -226,10 +226,25 @@ pub async fn scan_results(
 }
 
 /// One trip per source world, sorted by profit per hour.
+///
+/// On a given world, an item's NQ opportunity and its HQ-sold-as-NQ one
+/// target the same home demand; only the more profitable of the two counts.
 pub fn plan_trips(opps: &[OpportunityView], settings: &Settings) -> Vec<TripView> {
-    let mut by_world: BTreeMap<i64, Vec<usize>> = BTreeMap::new();
+    let mut best: HashMap<(i64, u32, &str), usize> = HashMap::new();
     for (i, o) in opps.iter().enumerate() {
-        by_world.entry(o.source_world_id).or_default().push(i);
+        let key = (o.source_world_id, o.item.id, o.sold_as.as_str());
+        match best.get(&key) {
+            Some(&j) if opps[j].profit_per_trip >= o.profit_per_trip => {}
+            _ => {
+                best.insert(key, i);
+            }
+        }
+    }
+    let mut by_world: BTreeMap<i64, Vec<usize>> = BTreeMap::new();
+    let mut kept: Vec<usize> = best.into_values().collect();
+    kept.sort_unstable();
+    for i in kept {
+        by_world.entry(opps[i].source_world_id).or_default().push(i);
     }
     let mut trips: Vec<TripView> = by_world
         .into_iter()
@@ -340,4 +355,54 @@ pub async fn scan_candidates(
             source_upload_ms: r.source_upload_unix.map(|s| s * 1000),
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn opp(item: u32, quality: &str, sold_as: &str, world: i64, ppt: i64) -> OpportunityView {
+        OpportunityView {
+            item: ItemInfo {
+                stack_size: 99,
+                ..placeholder_item(i64::from(item))
+            },
+            quality: quality.into(),
+            sold_as: sold_as.into(),
+            source_world_id: world,
+            source_world: format!("W{world}"),
+            source_dc: "Light".into(),
+            cross_region: false,
+            source_unit_price: 1,
+            units_to_buy: 10,
+            source_cost: 10,
+            expected_sell_price: 100,
+            home_median_price: 100,
+            home_units_per_day: 5.0,
+            days_of_supply: None,
+            unit_profit: ppt / 10,
+            profit_per_trip: ppt,
+            daily_profit: ppt / 3,
+            confidence: "OK".into(),
+            source_upload_ms: None,
+            is_stale: false,
+        }
+    }
+
+    #[test]
+    fn trips_count_shared_demand_once() {
+        let opps = [
+            opp(1, "NQ", "NQ", 33, 1000),
+            opp(1, "HQ", "NQ", 33, 1500), // same item, same demand, same world
+            opp(1, "HQ", "HQ", 33, 700),  // HQ demand is separate
+            opp(1, "NQ", "NQ", 36, 900),  // another world: its own trip
+        ];
+        let trips = plan_trips(&opps, &Settings::default());
+        let w33 = trips.iter().find(|t| t.world_id == 33).unwrap();
+        assert_eq!(w33.profit_per_trip, 2200);
+        let mut picked = w33.picked.clone();
+        picked.sort_unstable();
+        assert_eq!(picked, vec![1, 2]);
+        assert_eq!(trips[0].world_id, 33, "sorted by profit per hour");
+    }
 }

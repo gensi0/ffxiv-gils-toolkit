@@ -17,6 +17,7 @@ import { columnHelper } from "@/lib/table";
 import { EmptyState, PageHeader } from "@/components/Page";
 import { Age, ConfidenceBadge, ItemIcon, QualityTag } from "@/components/market";
 import { ScanButton, ScanProgressBar } from "@/components/ScanControls";
+import { TripCards } from "@/components/TripCards";
 import { errorMessage, type Candidate, type Opportunity, type ScanResults } from "@/lib/api";
 import { ago, decimal, gil } from "@/lib/format";
 import { useScanCandidates, useScanResults } from "@/lib/queries";
@@ -196,6 +197,7 @@ function OpportunityView({ r }: { r: ScanResults }) {
   const [dc, setDc] = useState(ALL);
   const [hqOnly, setHqOnly] = useState(false);
   const [minProfit, setMinProfit] = useState("");
+  const [grouped, setGrouped] = useState(false);
 
   const categories = useMemo(
     () =>
@@ -227,45 +229,67 @@ function OpportunityView({ r }: { r: ScanResults }) {
   return (
     <>
       <div className="flex flex-wrap items-center gap-3 border-b px-4 py-2 text-xs">
-        <FilterSelect
-          value={category}
-          onChange={setCategory}
-          all="All categories"
-          options={categories}
-        />
-        <FilterSelect value={dc} onChange={setDc} all="All source DCs" options={dcs} />
-        <Input
-          placeholder="Min profit / trip"
-          inputMode="numeric"
-          value={minProfit}
-          onChange={(e) => {
-            setMinProfit(e.target.value);
-          }}
-          className="h-7 w-36"
-        />
         <div className="flex items-center gap-1.5">
           <Checkbox
-            id="hq-only"
-            checked={hqOnly}
+            id="group-by-world"
+            checked={grouped}
             onCheckedChange={(c) => {
-              setHqOnly(c === true);
+              setGrouped(c === true);
             }}
           />
-          <Label htmlFor="hq-only">HQ only</Label>
+          <Label htmlFor="group-by-world">Group by source world</Label>
         </div>
-        <span className="ml-auto text-muted-foreground">
-          {rows.length} of {r.opportunities.length}
-        </span>
+        {grouped ? (
+          <span className="text-muted-foreground">
+            One card per world, best trips first. Filters do not apply to trips.
+          </span>
+        ) : (
+          <>
+            <FilterSelect
+              value={category}
+              onChange={setCategory}
+              all="All categories"
+              options={categories}
+            />
+            <FilterSelect value={dc} onChange={setDc} all="All source DCs" options={dcs} />
+            <Input
+              placeholder="Min profit / trip"
+              inputMode="numeric"
+              value={minProfit}
+              onChange={(e) => {
+                setMinProfit(e.target.value);
+              }}
+              className="h-7 w-36"
+            />
+            <div className="flex items-center gap-1.5">
+              <Checkbox
+                id="hq-only"
+                checked={hqOnly}
+                onCheckedChange={(c) => {
+                  setHqOnly(c === true);
+                }}
+              />
+              <Label htmlFor="hq-only">HQ only</Label>
+            </div>
+            <span className="ml-auto text-muted-foreground">
+              {rows.length} of {r.opportunities.length}
+            </span>
+          </>
+        )}
       </div>
-      <DataTable
-        columns={opportunityColumns}
-        data={rows}
-        initialSorting={[{ id: "dailyProfit", desc: true }]}
-        getRowId={(o) => `${o.item.id}-${o.quality}-${o.sourceWorldId}`}
-        onRowClick={(o) => {
-          openItem(o.item.id);
-        }}
-      />
+      {grouped ? (
+        <TripCards r={r} />
+      ) : (
+        <DataTable
+          columns={opportunityColumns}
+          data={rows}
+          initialSorting={[{ id: "dailyProfit", desc: true }]}
+          getRowId={(o) => `${o.item.id}-${o.quality}-${o.sourceWorldId}`}
+          onRowClick={(o) => {
+            openItem(o.item.id);
+          }}
+        />
+      )}
     </>
   );
 }

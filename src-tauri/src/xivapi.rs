@@ -162,6 +162,71 @@ fn parse_item_row(row_id: i64, f: &Value) -> ItemRow {
     }
 }
 
+/// Bundled subset of the game's item sheet (see scripts/gen_item_fallback.py),
+/// used only when XIVAPI is unreachable.
+const FALLBACK_TSV_GZ: &[u8] = include_bytes!("../data/items-fallback.tsv.gz");
+
+/// `ui/icon/020000/020801_hr1.tex` for icon id 20801.
+fn icon_path(icon_id: u32) -> String {
+    format!(
+        "ui/icon/{:06}/{:06}_hr1.tex",
+        icon_id / 1000 * 1000,
+        icon_id
+    )
+}
+
+fn parse_fallback(tsv: &str) -> HashMap<u32, ItemRow> {
+    let opt = |s: &str| (!s.is_empty()).then(|| s.to_owned());
+    tsv.lines()
+        .filter_map(|line| {
+            let f: Vec<&str> = line.split('\t').collect();
+            let [id, en, fr, de, ja, icon, stack, hq, level, isc, group, c_en, c_fr, c_de, c_ja] =
+                f[..]
+            else {
+                return None;
+            };
+            let id: u32 = id.parse().ok()?;
+            let icon: u32 = icon.parse().unwrap_or(0);
+            Some((
+                id,
+                ItemRow {
+                    item_id: i64::from(id),
+                    name_en: en.to_owned(),
+                    name_fr: opt(fr),
+                    name_de: opt(de),
+                    name_ja: opt(ja),
+                    icon_path: (icon > 0).then(|| icon_path(icon)),
+                    category: opt(c_en),
+                    category_fr: opt(c_fr),
+                    category_de: opt(c_de),
+                    category_ja: opt(c_ja),
+                    item_kind: None,
+                    stack_size: stack.parse().unwrap_or(1),
+                    level_item: level.parse().ok(),
+                    can_be_hq: hq == "1",
+                    is_marketable: isc.parse::<i64>().unwrap_or(0) > 0,
+                    is_housing: group.parse::<i64>().ok() == Some(HOUSING_CATEGORY),
+                },
+            ))
+        })
+        .collect()
+}
+
+fn fallback_items() -> &'static HashMap<u32, ItemRow> {
+    static ITEMS: std::sync::OnceLock<HashMap<u32, ItemRow>> = std::sync::OnceLock::new();
+    ITEMS.get_or_init(|| {
+        use std::io::Read;
+        let mut tsv = String::new();
+        match flate2::read::GzDecoder::new(FALLBACK_TSV_GZ).read_to_string(&mut tsv) {
+            Ok(_) => parse_fallback(&tsv),
+            Err(e) => {
+                tracing::error!(error = %e, "bundled item data unreadable");
+                HashMap::new()
+            }
+        }
+    })
+}
+
 /// Icon paths look like `ui/icon/020000/020801_hr1.tex`.
 pub fn is_valid_icon_path(path: &str) -> bool {
     path.starts_with("ui/icon/")
@@ -269,7 +334,15 @@ impl XivApi {
             {
                 Ok(b) => b,
                 Err(e) => {
-                    tracing::warn!(error = %e, count = chunk.len(), "XIVAPI item fetch failed");
+                    // Serve the bundled subset; it is never cached, so the
+                    // live data replaces it once XIVAPI is back.
+                    tracing::warn!(error = %e, count = chunk.len(), "XIVAPI item fetch failed, using bundled data");
+                    let fallback = fallback_items();
+                    known.extend(
+                        chunk
+                            .iter()
+                            .filter_map(|id| Some((*id, fallback.get(id)?.clone()))),
+                    );
                     continue;
                 }
             };
@@ -408,6 +481,24 @@ mod tests {
         );
         // Missing German name falls back to English.
         assert_eq!(row.localize(Language::De).name, "Iron Ingot");
+    }
+
+    #[test]
+    fn bundled_fallback_has_marketable_items() {
+        let items = fallback_items();
+        assert!(items.len() > 15_000);
+        let ingot = &items[&5057];
+        assert_eq!(ingot.name_fr.as_deref(), Some("Lingot de fer"));
+        assert_eq!(
+            ingot.icon_path.as_deref(),
+            Some("ui/icon/020000/020801_hr1.tex")
+        );
+        assert!(ingot.can_be_hq && ingot.is_marketable && !ingot.is_housing);
+        assert_eq!(ingot.stack_size, 999);
+        assert!(
+            items.values().any(|i| i.is_housing),
+            "housing flag survives"
+        );
     }
 
     #[test]

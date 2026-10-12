@@ -151,3 +151,8 @@ pub async fn watchlist_set_threshold(
 pub fn ws_status(state: State<'_, AppState>) -> WsStatus {
     state.watch.status()
 }
+
+#[tauri::command]
+pub async fn retry_failed_scan(app: AppHandle, scan_id: String) -> AppResult<()> {
+    scan::retry_failed(&app, &scan_id).await
+}

@@ -61,6 +61,17 @@ pub struct ArbitrageRow {
     pub source: SourceOpportunity,
 }
 
+/// One home-world sale, for the history chart.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SalePoint {
+    /// Unix ms.
+    pub t: i64,
+    pub price: u64,
+    pub quantity: u32,
+    pub hq: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemDetail {
@@ -71,6 +82,8 @@ pub struct ItemDetail {
     pub home_nq: QualityHomeStats,
     pub home_hq: QualityHomeStats,
     pub arbitrage: Vec<ArbitrageRow>,
+    /// Home-world sales over the last 28 days, oldest first.
+    pub sales: Vec<SalePoint>,
     /// DCs whose listings could not be fetched.
     pub failed_dcs: Vec<String>,
     pub fetched_at: i64,
@@ -218,6 +231,19 @@ pub async fn item_detail(state: &AppState, item_id: u32, refresh: bool) -> AppRe
         home_nq: quality_stats(Quality::NQ, analysis.home_nq),
         home_hq: quality_stats(Quality::HQ, analysis.home_hq),
         arbitrage,
+        sales: {
+            let mut points: Vec<SalePoint> = sales
+                .iter()
+                .map(|s| SalePoint {
+                    t: s.timestamp * 1000,
+                    price: s.price_per_unit,
+                    quantity: s.quantity,
+                    hq: s.hq,
+                })
+                .collect();
+            points.sort_by_key(|p| p.t);
+            points
+        },
         failed_dcs,
         fetched_at: now,
     })

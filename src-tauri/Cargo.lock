@@ -1208,6 +1208,7 @@ name = "ffxiv-trader"
 version = "0.1.0"
 dependencies = [
  "bson",
+ "flate2",
  "futures",
  "governor",
  "reqwest 0.12.28",

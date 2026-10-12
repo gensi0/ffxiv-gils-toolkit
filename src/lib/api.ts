@@ -139,6 +139,13 @@ export interface ArbitrageRow {
   isStale: boolean;
 }
 
+export interface SalePoint {
+  t: number;
+  price: number;
+  quantity: number;
+  hq: boolean;
+}
+
 export interface ItemDetail {
   item: ItemInfo;
   homeWorld: string;
@@ -147,6 +154,7 @@ export interface ItemDetail {
   homeNq: QualityHomeStats;
   homeHq: QualityHomeStats;
   arbitrage: ArbitrageRow[];
+  sales: SalePoint[];
   failedDcs: string[];
   fetchedAt: number;
 }

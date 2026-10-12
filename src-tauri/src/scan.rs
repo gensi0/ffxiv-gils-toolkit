@@ -129,10 +129,47 @@ fn app_sink(app: AppHandle) -> Sink {
     })
 }
 
-/// Starts a scan in the background and returns its id.
+/// What a run covers.
+#[derive(Debug, Clone)]
+pub enum Mode {
+    /// Every marketable item, as a new scan.
+    Full,
+    /// Only these items, merged into an existing scan.
+    Retry(Vec<u32>),
+}
+
+/// Starts a full scan in the background and returns its id.
 pub fn start(app: &AppHandle) -> AppResult<String> {
-    let state = app.state::<AppState>();
     let scan_id = format!("scan-{}", now_ms());
+    launch(app, scan_id, Mode::Full)
+}
+
+/// Re-runs only the items that failed in `scan_id`, merging into it.
+pub async fn retry_failed(app: &AppHandle, scan_id: &str) -> AppResult<()> {
+    let state = app.state::<AppState>();
+    let failed: Option<String> = sqlx::query_scalar(
+        "SELECT failed_items FROM scan_runs WHERE scan_id = ? AND status = 'done'",
+    )
+    .bind(scan_id)
+    .fetch_optional(&state.db)
+    .await?
+    .flatten();
+    let ids: Vec<u32> = failed
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()?
+        .unwrap_or_default();
+    if ids.is_empty() {
+        return Err(AppError::Invalid(
+            "this scan has no failed items to retry".into(),
+        ));
+    }
+    launch(app, scan_id.to_owned(), Mode::Retry(ids))?;
+    Ok(())
+}
+
+fn launch(app: &AppHandle, scan_id: String, mode: Mode) -> AppResult<String> {
+    let state = app.state::<AppState>();
     let cancel = CancellationToken::new();
     {
         let mut slot = state.scans.running.lock().expect("scan lock");
@@ -164,7 +201,7 @@ pub fn start(app: &AppHandle) -> AppResult<String> {
             items_failed: 0,
         };
         let state = app.state::<AppState>();
-        let outcome = run(&state, &id, &cancel, &mut reporter).await;
+        let outcome = run(&state, &id, &mode, &cancel, &mut reporter).await;
         let (status, phase, error) = match &outcome {
             Ok(()) => ("done", Phase::Done, None),
             Err(_) if cancel.is_cancelled() => ("cancelled", Phase::Cancelled, None),
@@ -336,6 +373,7 @@ fn prefilter_item(
 async fn run(
     state: &AppState,
     scan_id: &str,
+    mode: &Mode,
     cancel: &CancellationToken,
     rep: &mut Reporter,
 ) -> AppResult<()> {
@@ -343,16 +381,30 @@ async fn run(
     let api = &state.universalis;
     let settings = settings::load(db).await?;
     let scope = scope::build(&settings, &worlds::load(db).await?)?;
-    let started = now_ms();
-    sqlx::query("INSERT INTO scan_runs (scan_id, started_at, status) VALUES (?, ?, 'running')")
-        .bind(scan_id)
-        .bind(started)
-        .execute(db)
-        .await?;
+    match mode {
+        Mode::Full => {
+            sqlx::query(
+                "INSERT INTO scan_runs (scan_id, started_at, status) VALUES (?, ?, 'running')",
+            )
+            .bind(scan_id)
+            .bind(now_ms())
+            .execute(db)
+            .await?
+        }
+        Mode::Retry(_) => {
+            sqlx::query("UPDATE scan_runs SET status = 'running', error = NULL WHERE scan_id = ?")
+                .bind(scan_id)
+                .execute(db)
+                .await?
+        }
+    };
     rep.emit(Phase::Preparing, None);
 
     let seller_tax = seller_tax(api, &scope, &settings).await;
-    let ids = or_cancel(cancel, api.marketable()).await??;
+    let ids = match mode {
+        Mode::Full => or_cancel(cancel, api.marketable()).await??,
+        Mode::Retry(ids) => ids.clone(),
+    };
     let chunks: Vec<Vec<u32>> = ids
         .chunks(MAX_IDS_PER_REQUEST)
         .map(<[u32]>::to_vec)
@@ -597,12 +649,22 @@ async fn run(
             opp_items.push(item_id);
         }
     }
+    let mut failed_ids: Vec<u32> = failed.iter().copied().collect();
+    failed_ids.sort_unstable();
+    // A retry keeps the original item count; opportunities are recounted
+    // because the retried items are added to the existing ones.
     sqlx::query(
-        "UPDATE scan_runs SET items_scanned = ?, opportunities_found = ?, items_failed = ? WHERE scan_id = ?",
+        "UPDATE scan_runs SET
+           items_scanned = CASE WHEN ? THEN ? ELSE items_scanned END,
+           opportunities_found = (SELECT COUNT(*) FROM opportunities WHERE scan_id = ?),
+           items_failed = ?, failed_items = ?
+         WHERE scan_id = ?",
     )
+    .bind(matches!(mode, Mode::Full))
     .bind(ids.len() as i64)
-    .bind(found)
-    .bind(failed.len() as i64)
+    .bind(scan_id)
+    .bind(failed_ids.len() as i64)
+    .bind(serde_json::to_string(&failed_ids)?)
     .bind(scan_id)
     .execute(&mut *tx)
     .await?;
@@ -953,9 +1015,15 @@ mod live_full {
             items_failed: 0,
         };
         let t0 = Instant::now();
-        run(&state, "live", &CancellationToken::new(), &mut rep)
-            .await
-            .unwrap();
+        run(
+            &state,
+            "live",
+            &Mode::Full,
+            &CancellationToken::new(),
+            &mut rep,
+        )
+        .await
+        .unwrap();
         finish_run(&pool, "live", "done", rep.items_failed, None)
             .await
             .unwrap();

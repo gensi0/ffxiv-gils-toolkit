@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/Page";
 import { WatchButton } from "@/components/WatchButton";
+import { SalesChart } from "@/components/SalesChart";
 import { DataTable } from "@/components/DataTable";
 import { columnHelper } from "@/lib/table";
 import { Age, ConfidenceBadge, ItemIcon, QualityTag } from "@/components/market";
@@ -130,6 +131,10 @@ function DetailBody({ d }: { d: ItemDetail }) {
         ) : (
           <ArbitrageTable rows={d.arbitrage} />
         )}
+      </Section>
+
+      <Section title={`Sales history · ${d.homeWorld} · 28 days`}>
+        <SalesChart sales={d.sales} canBeHq={item.canBeHq} now={d.fetchedAt} />
       </Section>
 
       <Section title={`Home market · ${d.homeWorld}`}>
