@@ -1,15 +1,11 @@
 import { useMemo, useState } from "react";
+import { Popover } from "radix-ui";
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/DataTable";
@@ -26,8 +22,6 @@ import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useNav } from "@/store/nav";
-
-const ALL = "__all__";
 
 export function ScanPage() {
   const scanId = useNav((s) => s.scanId);
@@ -198,15 +192,15 @@ const opportunityColumns = [
 function OpportunityView({ r }: { r: ScanResults }) {
   const openItem = useNav((s) => s.openItem);
   const worlds = useWorlds();
-  const [category, setCategory] = useState(ALL);
-  const [region, setRegion] = useState(ALL);
-  const [dc, setDc] = useState(ALL);
-  const [world, setWorld] = useState(ALL);
+  const [category, setCategory] = useState<string[]>([]);
+  const [selRegions, setSelRegions] = useState<string[]>([]);
+  const [selDcs, setSelDcs] = useState<string[]>([]);
+  const [selWorlds, setSelWorlds] = useState<string[]>([]);
   const [hqOnly, setHqOnly] = useState(false);
   const [minProfit, setMinProfit] = useState("");
   const [grouped, setGrouped] = useState(false);
 
-  // Build DC→region and world→DC lookup from worlds data
+  // Build DC→region lookup from worlds data
   const dcToRegion = useMemo(() => {
     const map = new Map<string, string>();
     for (const w of worlds.data ?? []) map.set(w.dc, w.region);
@@ -226,34 +220,38 @@ function OpportunityView({ r }: { r: ScanResults }) {
     [r.opportunities, dcToRegion],
   );
 
+  // DCs filtered by selected regions
   const dcs = useMemo(() => {
     const all = [...new Set(r.opportunities.map((o) => o.sourceDc))].sort();
-    if (region === ALL) return all;
-    return all.filter((d) => dcToRegion.get(d) === region);
-  }, [r.opportunities, region, dcToRegion]);
+    if (selRegions.length === 0) return all;
+    return all.filter((d) => selRegions.includes(dcToRegion.get(d) ?? "Unknown"));
+  }, [r.opportunities, selRegions, dcToRegion]);
 
-  const worlds_ = useMemo(() => {
+  // Worlds filtered by selected DCs (and regions)
+  const availableWorlds = useMemo(() => {
     const all = [...new Set(r.opportunities.map((o) => o.sourceWorld))].sort();
-    if (dc !== ALL) return all.filter((w) => {
+    if (selDcs.length > 0) return all.filter((w) => {
       const opp = r.opportunities.find((o) => o.sourceWorld === w);
-      return opp?.sourceDc === dc;
+      return opp ? selDcs.includes(opp.sourceDc) : false;
     });
-    if (region !== ALL) return all.filter((w) => {
+    if (selRegions.length > 0) return all.filter((w) => {
       const opp = r.opportunities.find((o) => o.sourceWorld === w);
-      return opp ? dcToRegion.get(opp.sourceDc) === region : false;
+      return opp ? selRegions.includes(dcToRegion.get(opp.sourceDc) ?? "Unknown") : false;
     });
     return all;
-  }, [r.opportunities, dc, region, dcToRegion]);
+  }, [r.opportunities, selDcs, selRegions, dcToRegion]);
 
-  // Reset cascading selections when parent filter changes
-  const handleRegionChange = (v: string) => {
-    setRegion(v);
-    setDc(ALL);
-    setWorld(ALL);
+  // Cascade: when regions change, drop DCs/worlds no longer valid
+  const handleRegionChange = (v: string[]) => {
+    setSelRegions(v);
+    if (v.length > 0) {
+      setSelDcs((prev) => prev.filter((d) => v.includes(dcToRegion.get(d) ?? "Unknown")));
+      setSelWorlds([]);
+    }
   };
-  const handleDcChange = (v: string) => {
-    setDc(v);
-    setWorld(ALL);
+  const handleDcChange = (v: string[]) => {
+    setSelDcs(v);
+    if (v.length > 0) setSelWorlds([]);
   };
 
   const minProfitValue = Number(minProfit.replace(/[\s,_]/g, "")) || 0;
@@ -261,14 +259,14 @@ function OpportunityView({ r }: { r: ScanResults }) {
     () =>
       r.opportunities.filter(
         (o) =>
-          (category === ALL || o.item.category === category) &&
-          (region === ALL || dcToRegion.get(o.sourceDc) === region) &&
-          (dc === ALL || o.sourceDc === dc) &&
-          (world === ALL || o.sourceWorld === world) &&
+          (category.length === 0 || category.includes(o.item.category ?? "")) &&
+          (selRegions.length === 0 || selRegions.includes(dcToRegion.get(o.sourceDc) ?? "Unknown")) &&
+          (selDcs.length === 0 || selDcs.includes(o.sourceDc)) &&
+          (selWorlds.length === 0 || selWorlds.includes(o.sourceWorld)) &&
           (!hqOnly || o.quality === "HQ") &&
           o.profitPerTrip >= minProfitValue,
       ),
-    [r.opportunities, category, region, dc, world, hqOnly, minProfitValue, dcToRegion],
+    [r.opportunities, category, selRegions, selDcs, selWorlds, hqOnly, minProfitValue, dcToRegion],
   );
 
   if (r.opportunities.length === 0) {
@@ -293,20 +291,20 @@ function OpportunityView({ r }: { r: ScanResults }) {
           </span>
         ) : (
           <>
-            <FilterSelect
-              value={category}
-              onChange={setCategory}
-              all="All categories"
-              options={categories}
-            />
-            <FilterSelect
-              value={region}
-              onChange={handleRegionChange}
-              all="All regions"
-              options={regions}
-            />
-            <FilterSelect value={dc} onChange={handleDcChange} all="All DCs" options={dcs} />
-            <FilterSelect value={world} onChange={setWorld} all="All servers" options={worlds_} />
+          <MultiSelect
+            value={category}
+            onChange={setCategory}
+            all="All categories"
+            options={categories}
+          />
+          <MultiSelect
+            value={selRegions}
+            onChange={handleRegionChange}
+            all="All regions"
+            options={regions}
+          />
+          <MultiSelect value={selDcs} onChange={handleDcChange} all="All DCs" options={dcs} />
+          <MultiSelect value={selWorlds} onChange={setSelWorlds} all="All servers" options={availableWorlds} />
             <Input
               placeholder="Min profit / trip"
               inputMode="numeric"
@@ -349,26 +347,74 @@ function OpportunityView({ r }: { r: ScanResults }) {
   );
 }
 
-function FilterSelect(props: {
-  value: string;
-  onChange: (v: string) => void;
+function MultiSelect({
+  all,
+  options,
+  value,
+  onChange,
+}: {
   all: string;
   options: string[];
+  value: string[];
+  onChange: (v: string[]) => void;
 }) {
+  const toggle = (opt: string) => {
+    onChange(value.includes(opt) ? value.filter((v) => v !== opt) : [...value, opt]);
+  };
+  const label =
+    value.length === 0
+      ? all
+      : value.length === 1
+        ? value[0]
+        : `${value.length} selected`;
+
   return (
-    <Select value={props.value} onValueChange={props.onChange}>
-      <SelectTrigger size="sm" className="w-44">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent className="max-h-72">
-        <SelectItem value={ALL}>{props.all}</SelectItem>
-        {props.options.map((o) => (
-          <SelectItem key={o} value={o}>
-            {o}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(
+            "h-7 w-40 justify-between px-2 text-xs font-normal",
+            value.length > 0 && "border-primary/60 text-foreground",
+          )}
+        >
+          <span className="truncate">{label}</span>
+          <ChevronDownIcon className="ml-1 size-3 shrink-0 text-muted-foreground" />
+        </Button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="start"
+          sideOffset={4}
+          className="z-50 max-h-72 w-48 overflow-y-auto rounded-lg border bg-popover p-1 shadow-md"
+        >
+          {value.length > 0 && (
+            <>
+              <button
+                onClick={() => onChange([])}
+                className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                Clear selection
+              </button>
+              <Separator className="my-1" />
+            </>
+          )}
+          {options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => toggle(opt)}
+              className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-muted"
+            >
+              <span className="flex size-3.5 shrink-0 items-center justify-center rounded-sm border border-muted-foreground/40">
+                {value.includes(opt) && <CheckIcon className="size-3" />}
+              </span>
+              <span className="truncate">{opt}</span>
+            </button>
+          ))}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
