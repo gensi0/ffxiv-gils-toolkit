@@ -22,6 +22,7 @@ import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useNav } from "@/store/nav";
+import { useScanFilters } from "@/store/scanFilters";
 
 export function ScanPage() {
   const scanId = useNav((s) => s.scanId);
@@ -190,15 +191,24 @@ const opportunityColumns = [
   }),
 ];
 
+const CONFIDENCE_OPTIONS = ["HOT", "OK", "COMPETITIVE", "SATURATED", "SLOW"];
+
 function OpportunityView({ r }: { r: ScanResults }) {
   const openItem = useNav((s) => s.openItem);
   const worlds = useWorlds();
-  const [category, setCategory] = useState<string[]>([]);
-  const [selRegions, setSelRegions] = useState<string[]>([]);
-  const [selDcs, setSelDcs] = useState<string[]>([]);
-  const [selWorlds, setSelWorlds] = useState<string[]>([]);
-  const [hqOnly, setHqOnly] = useState(false);
-  const [minProfit, setMinProfit] = useState("");
+
+  // Persistent filters & sorting via Zustand store
+  const {
+    category, setCategory,
+    selRegions, setSelRegions,
+    selDcs, setSelDcs,
+    selWorlds, setSelWorlds,
+    selConfidence, setSelConfidence,
+    hqOnly, setHqOnly,
+    minProfit, setMinProfit,
+    sorting, setSorting,
+  } = useScanFilters();
+
   const [grouped, setGrouped] = useState(false);
 
   // Build DC→region lookup from worlds data
@@ -246,7 +256,7 @@ function OpportunityView({ r }: { r: ScanResults }) {
   const handleRegionChange = (v: string[]) => {
     setSelRegions(v);
     if (v.length > 0) {
-      setSelDcs((prev) => prev.filter((d) => v.includes(dcToRegion.get(d) ?? "Unknown")));
+      setSelDcs(selDcs.filter((d) => v.includes(dcToRegion.get(d) ?? "Unknown")));
       setSelWorlds([]);
     }
   };
@@ -264,6 +274,7 @@ function OpportunityView({ r }: { r: ScanResults }) {
           (selRegions.length === 0 || selRegions.includes(dcToRegion.get(o.sourceDc) ?? "Unknown")) &&
           (selDcs.length === 0 || selDcs.includes(o.sourceDc)) &&
           (selWorlds.length === 0 || selWorlds.includes(o.sourceWorld)) &&
+          (selConfidence.length === 0 || selConfidence.includes(o.confidence)) &&
           (!hqOnly || o.quality === "HQ") &&
           o.profitPerTrip >= minProfitValue,
       ),
@@ -305,7 +316,8 @@ function OpportunityView({ r }: { r: ScanResults }) {
             options={regions}
           />
           <MultiSelect value={selDcs} onChange={handleDcChange} all="All DCs" options={dcs} />
-          <MultiSelect value={selWorlds} onChange={setSelWorlds} all="All servers" options={availableWorlds} />
+            <MultiSelect value={selWorlds} onChange={setSelWorlds} all="All servers" options={availableWorlds} />
+            <MultiSelect value={selConfidence} onChange={setSelConfidence} all="All confidence" options={CONFIDENCE_OPTIONS} />
             <Input
               placeholder="Min profit / trip"
               inputMode="numeric"
@@ -337,7 +349,8 @@ function OpportunityView({ r }: { r: ScanResults }) {
         <DataTable
           columns={opportunityColumns}
           data={rows}
-          initialSorting={[{ id: "dailyProfit", desc: true }]}
+          sorting={sorting}
+          onSortingChange={setSorting}
           getRowId={(o) => `${o.item.id}-${o.quality}-${o.sourceWorldId}`}
           onRowClick={(o) => {
             openItem(o.item.id);
