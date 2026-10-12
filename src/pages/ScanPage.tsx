@@ -20,7 +20,7 @@ import { ScanButton, ScanProgressBar } from "@/components/ScanControls";
 import { TripCards } from "@/components/TripCards";
 import { api, errorMessage, type Candidate, type Opportunity, type ScanResults } from "@/lib/api";
 import { ago, decimal, gil } from "@/lib/format";
-import { isRunning, useScanCandidates, useScanResults } from "@/lib/queries";
+import { isRunning, useScanCandidates, useScanResults, useWorlds } from "@/lib/queries";
 import { useLive } from "@/store/live";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -197,11 +197,21 @@ const opportunityColumns = [
 
 function OpportunityView({ r }: { r: ScanResults }) {
   const openItem = useNav((s) => s.openItem);
+  const worlds = useWorlds();
   const [category, setCategory] = useState(ALL);
+  const [region, setRegion] = useState(ALL);
   const [dc, setDc] = useState(ALL);
+  const [world, setWorld] = useState(ALL);
   const [hqOnly, setHqOnly] = useState(false);
   const [minProfit, setMinProfit] = useState("");
   const [grouped, setGrouped] = useState(false);
+
+  // Build DC→region and world→DC lookup from worlds data
+  const dcToRegion = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const w of worlds.data ?? []) map.set(w.dc, w.region);
+    return map;
+  }, [worlds.data]);
 
   const categories = useMemo(
     () =>
@@ -210,21 +220,55 @@ function OpportunityView({ r }: { r: ScanResults }) {
       ].sort(),
     [r.opportunities],
   );
-  const dcs = useMemo(
-    () => [...new Set(r.opportunities.map((o) => o.sourceDc))].sort(),
-    [r.opportunities],
+
+  const regions = useMemo(
+    () => [...new Set(r.opportunities.map((o) => dcToRegion.get(o.sourceDc) ?? "Unknown"))].sort(),
+    [r.opportunities, dcToRegion],
   );
+
+  const dcs = useMemo(() => {
+    const all = [...new Set(r.opportunities.map((o) => o.sourceDc))].sort();
+    if (region === ALL) return all;
+    return all.filter((d) => dcToRegion.get(d) === region);
+  }, [r.opportunities, region, dcToRegion]);
+
+  const worlds_ = useMemo(() => {
+    const all = [...new Set(r.opportunities.map((o) => o.sourceWorld))].sort();
+    if (dc !== ALL) return all.filter((w) => {
+      const opp = r.opportunities.find((o) => o.sourceWorld === w);
+      return opp?.sourceDc === dc;
+    });
+    if (region !== ALL) return all.filter((w) => {
+      const opp = r.opportunities.find((o) => o.sourceWorld === w);
+      return opp ? dcToRegion.get(opp.sourceDc) === region : false;
+    });
+    return all;
+  }, [r.opportunities, dc, region, dcToRegion]);
+
+  // Reset cascading selections when parent filter changes
+  const handleRegionChange = (v: string) => {
+    setRegion(v);
+    setDc(ALL);
+    setWorld(ALL);
+  };
+  const handleDcChange = (v: string) => {
+    setDc(v);
+    setWorld(ALL);
+  };
+
   const minProfitValue = Number(minProfit.replace(/[\s,_]/g, "")) || 0;
   const rows = useMemo(
     () =>
       r.opportunities.filter(
         (o) =>
           (category === ALL || o.item.category === category) &&
+          (region === ALL || dcToRegion.get(o.sourceDc) === region) &&
           (dc === ALL || o.sourceDc === dc) &&
+          (world === ALL || o.sourceWorld === world) &&
           (!hqOnly || o.quality === "HQ") &&
           o.profitPerTrip >= minProfitValue,
       ),
-    [r.opportunities, category, dc, hqOnly, minProfitValue],
+    [r.opportunities, category, region, dc, world, hqOnly, minProfitValue, dcToRegion],
   );
 
   if (r.opportunities.length === 0) {
@@ -255,7 +299,14 @@ function OpportunityView({ r }: { r: ScanResults }) {
               all="All categories"
               options={categories}
             />
-            <FilterSelect value={dc} onChange={setDc} all="All source DCs" options={dcs} />
+            <FilterSelect
+              value={region}
+              onChange={handleRegionChange}
+              all="All regions"
+              options={regions}
+            />
+            <FilterSelect value={dc} onChange={handleDcChange} all="All DCs" options={dcs} />
+            <FilterSelect value={world} onChange={setWorld} all="All servers" options={worlds_} />
             <Input
               placeholder="Min profit / trip"
               inputMode="numeric"
