@@ -21,7 +21,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ConfidenceBadge } from "@/components/market";
 import { gil } from "@/lib/format";
 import { useMarketStats } from "@/lib/queries";
-import type { Confidence } from "@/lib/api";
+import type { Confidence, RegionStat } from "@/lib/api";
 
 // ---------- helpers ----------
 
@@ -344,6 +344,36 @@ export function StatsPage() {
                   <div className="flex gap-3 text-xs text-muted-foreground">
                     <span>{dc.totalOpps.toLocaleString()} opps</span>
                     <span className="text-emerald-500">+{dc.avgGapPct.toFixed(0)}% avg gap</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* ── Region rankings ── */}
+        {data.regionRankings.length > 0 && (
+          <Section
+            title="Region comparison"
+            tip="Vue macro par région de jeu (Europe, Japan, North-America, Oceania). Utile si tu actives les trips cross-région dans tes settings."
+          >
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {data.regionRankings.map((r: RegionStat) => (
+                <div key={r.region} className="rounded-lg border bg-card p-3 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">{r.region}</span>
+                    <div className="flex gap-1">
+                      <Badge variant="outline" className="text-[10px]">{r.dcCount} DC</Badge>
+                      <Badge variant="outline" className="text-[10px]">{r.worldCount} W</Badge>
+                    </div>
+                  </div>
+                  <p className="text-xl font-semibold tabular-nums text-amber-500">
+                    {gil(r.totalDailyProfit)}
+                    <span className="text-xs font-normal text-muted-foreground"> gil/day</span>
+                  </p>
+                  <div className="flex gap-3 text-xs text-muted-foreground">
+                    <span>{r.totalOpps.toLocaleString()} opps</span>
+                    <span className="text-emerald-500">+{r.avgGapPct.toFixed(0)}% avg gap</span>
                   </div>
                 </div>
               ))}

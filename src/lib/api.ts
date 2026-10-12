@@ -259,6 +259,15 @@ export interface DcStat {
   avgGapPct: number;
 }
 
+export interface RegionStat {
+  region: string;
+  dcCount: number;
+  worldCount: number;
+  totalOpps: number;
+  totalDailyProfit: number;
+  avgGapPct: number;
+}
+
 export interface ConfidenceBucket {
   label: Confidence;
   count: number;
@@ -294,6 +303,7 @@ export interface MarketStats {
   avgOppsPerScan: number;
   worldRankings: WorldStat[];
   dcRankings: DcStat[];
+  regionRankings: RegionStat[];
   confidenceDist: ConfidenceBucket[];
   topItems: TopItem[];
   scanHistory: ScanPoint[];

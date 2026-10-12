@@ -20,6 +20,7 @@ pub struct MarketStats {
     pub avg_opps_per_scan: f64,
     pub world_rankings: Vec<WorldStat>,
     pub dc_rankings: Vec<DcStat>,
+    pub region_rankings: Vec<RegionStat>,
     pub confidence_dist: Vec<ConfidenceBucket>,
     pub top_items: Vec<TopItem>,
     pub scan_history: Vec<ScanPoint>,
@@ -43,6 +44,17 @@ pub struct WorldStat {
 #[serde(rename_all = "camelCase")]
 pub struct DcStat {
     pub dc: String,
+    pub world_count: i64,
+    pub total_opps: i64,
+    pub total_daily_profit: i64,
+    pub avg_gap_pct: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegionStat {
+    pub region: String,
+    pub dc_count: i64,
     pub world_count: i64,
     pub total_opps: i64,
     pub total_daily_profit: i64,
@@ -114,6 +126,16 @@ struct WorldRow {
 #[derive(sqlx::FromRow)]
 struct DcRow {
     dc: String,
+    world_count: i64,
+    total_opps: i64,
+    total_daily_profit: i64,
+    avg_gap_pct: f64,
+}
+
+#[derive(sqlx::FromRow)]
+struct RegionRow {
+    region: String,
+    dc_count: i64,
     world_count: i64,
     total_opps: i64,
     total_daily_profit: i64,
@@ -256,6 +278,36 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
         })
         .collect();
 
+    // --- region rankings ---
+    let region_rows: Vec<RegionRow> = sqlx::query_as(
+        "SELECT COALESCE(w.region, 'Unknown') AS region,
+                COUNT(DISTINCT w.dc_name) AS dc_count,
+                COUNT(DISTINCT o.source_world_id) AS world_count,
+                COUNT(*) AS total_opps,
+                COALESCE(SUM(o.daily_profit), 0) AS total_daily_profit,
+                COALESCE(AVG(CASE WHEN o.home_median_price > 0
+                         THEN CAST(o.unit_profit AS REAL) / o.home_median_price
+                         ELSE NULL END), 0.0) AS avg_gap_pct
+         FROM opportunities o
+         LEFT JOIN worlds w ON w.world_id = o.source_world_id
+         GROUP BY region
+         ORDER BY total_daily_profit DESC",
+    )
+    .fetch_all(db)
+    .await?;
+
+    let region_rankings: Vec<RegionStat> = region_rows
+        .into_iter()
+        .map(|r| RegionStat {
+            region: r.region,
+            dc_count: r.dc_count,
+            world_count: r.world_count,
+            total_opps: r.total_opps,
+            total_daily_profit: r.total_daily_profit,
+            avg_gap_pct: r.avg_gap_pct * 100.0,
+        })
+        .collect();
+
     let conf_rows: Vec<ConfRow> = sqlx::query_as(
         "SELECT confidence AS label,
                 COUNT(*) AS count,
@@ -367,6 +419,7 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
         avg_opps_per_scan: summary.avg_opps,
         world_rankings,
         dc_rankings,
+        region_rankings,
         confidence_dist,
         top_items,
         scan_history,
