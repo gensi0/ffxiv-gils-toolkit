@@ -5,9 +5,10 @@ arbitrage: items cheaper on another world or data center than on your home
 world, that your home market will actually absorb within a few days. It ranks
 opportunities by expected gil per day, not by raw price gap.
 
-Status: **M5** — settings, item search, item detail, full scan with drill-down
-and the profit math, live watchlist over the Universalis WebSocket with desktop
-notifications. Travel grouping, charts and CI builds (M6) are next.
+Status: **v1 complete (M1–M6)** — settings, item search and detail with sales
+history, full scan with drill-down and the profit math, trips grouped by source
+world, live watchlist over the Universalis WebSocket with desktop notifications,
+and CI builds for macOS, Linux and Windows.
 Full spec: [`ffxiv-arbitrage-scanner-prompt.md`](ffxiv-arbitrage-scanner-prompt.md).
 
 ## The math in 90 seconds
@@ -63,10 +64,52 @@ App data (SQLite database) lives in the OS app-data directory
 (`~/Library/Application Support/app.ffxivtrader` on macOS); daily-rotated logs
 (7 days) in the OS log directory. Settings → About → "Open log folder".
 
+## Releases
+
+Push a version tag to build every target and get a **draft** GitHub release
+with the installers attached (`.dmg`, `.deb`, `.AppImage`, `.msi`):
+
+```sh
+# bump "version" in src-tauri/tauri.conf.json and package.json first
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+CI (`.github/workflows/ci.yml`) runs typecheck, lint, format, rustfmt, clippy
+and the Rust tests on every push and pull request.
+
+### Opening an unsigned build on macOS
+
+v1 builds are not signed or notarized, so Gatekeeper blocks the first launch
+("cannot be opened because the developer cannot be verified"). Either:
+
+- right-click the app in Finder → **Open** → **Open**, once; or
+- clear the quarantine flag after copying it to Applications:
+  `xattr -dr com.apple.quarantine "/Applications/FFXIV Trader.app"`
+
+On Windows, SmartScreen shows "Windows protected your PC": click **More info**
+→ **Run anyway**.
+
+### Enabling signing
+
+The release workflow signs automatically once these repository secrets exist:
+
+- macOS: `APPLE_CERTIFICATE` (base64 .p12), `APPLE_CERTIFICATE_PASSWORD`,
+  `APPLE_SIGNING_IDENTITY`, and for notarization `APPLE_ID`, `APPLE_PASSWORD`
+  (app-specific password), `APPLE_TEAM_ID`.
+- Windows: `WINDOWS_CERTIFICATE` (base64 .pfx), `WINDOWS_CERTIFICATE_PASSWORD`.
+
+## Offline item data
+
+If XIVAPI is unreachable, item names, icons and stack sizes come from a bundled
+subset of the game's item sheet (`src-tauri/data/items-fallback.tsv.gz`, from
+[ffxiv-datamining](https://github.com/xivapi/ffxiv-datamining)). Refresh it after
+a game patch with `python3 scripts/gen_item_fallback.py`.
+
 ## Attribution
 
 - Market data from [universalis.app](https://universalis.app).
-- Item data from [XIVAPI](https://v2.xivapi.com).
+- Item data from [XIVAPI](https://v2.xivapi.com) and
+  [ffxiv-datamining](https://github.com/xivapi/ffxiv-datamining).
 - This app only reads Universalis data; it never uploads anything.
 
 FFXIV Trader is a fan tool, not affiliated with or endorsed by Square Enix.

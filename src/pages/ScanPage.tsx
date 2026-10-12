@@ -18,9 +18,12 @@ import { EmptyState, PageHeader } from "@/components/Page";
 import { Age, ConfidenceBadge, ItemIcon, QualityTag } from "@/components/market";
 import { ScanButton, ScanProgressBar } from "@/components/ScanControls";
 import { TripCards } from "@/components/TripCards";
-import { errorMessage, type Candidate, type Opportunity, type ScanResults } from "@/lib/api";
+import { api, errorMessage, type Candidate, type Opportunity, type ScanResults } from "@/lib/api";
 import { ago, decimal, gil } from "@/lib/format";
-import { useScanCandidates, useScanResults } from "@/lib/queries";
+import { isRunning, useScanCandidates, useScanResults } from "@/lib/queries";
+import { useLive } from "@/store/live";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useNav } from "@/store/nav";
 
@@ -105,8 +108,9 @@ function RunSummary(props: {
         Scanned {ago(run.startedAt)} · {gil(run.itemsScanned)} items · home {props.r.homeWorld}
       </span>
       {(run.itemsFailed ?? 0) > 0 && (
-        <span className="text-amber-600 dark:text-amber-400">
-          {run.itemsFailed} items failed to fetch — run a new scan to retry
+        <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+          {run.itemsFailed} items failed to fetch
+          <RetryButton scanId={run.scanId} />
         </span>
       )}
     </div>
@@ -412,5 +416,25 @@ function CandidateView({ scanId }: { scanId: string }) {
         }}
       />
     </>
+  );
+}
+
+function RetryButton({ scanId }: { scanId: string }) {
+  const running = isRunning(useLive((s) => s.scan));
+  const retry = useMutation({
+    mutationFn: () => api.retryFailedScan(scanId),
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  return (
+    <Button
+      variant="outline"
+      size="xs"
+      disabled={running || retry.isPending}
+      onClick={() => {
+        retry.mutate();
+      }}
+    >
+      Retry
+    </Button>
   );
 }

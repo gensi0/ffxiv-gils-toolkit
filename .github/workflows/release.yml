@@ -1,0 +1,110 @@
+name: Release
+
+# Push a tag like v0.2.0 to build every target and attach the installers to a
+# draft GitHub release. Builds are unsigned unless the optional signing
+# secrets below are configured (see README, "Releases").
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS arm64
+            os: macos-latest
+            args: --target aarch64-apple-darwin
+          - name: macOS x64 (cross-compiled on arm64)
+            os: macos-latest
+            args: --target x86_64-apple-darwin
+          - name: Linux x64
+            os: ubuntu-22.04
+            args: ""
+          - name: Windows x64
+            os: windows-latest
+            args: ""
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tauri system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.name }}
+
+      # Signing hooks: each runs only when its secrets exist, so forks and
+      # unsigned v1 builds go through untouched.
+      - name: macOS signing and notarization (optional)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+              echo "$v=${!v}" >> "$GITHUB_ENV"
+            done
+            echo "macOS signing enabled"
+          else
+            echo "No Apple secrets: building unsigned"
+          fi
+
+      - name: Windows code signing (optional)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ($env:WINDOWS_CERTIFICATE) {
+            $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+            $pw = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+            $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+            # Merged into tauri.conf.json via --config <file> (a file avoids quoting issues).
+            $configFile = Join-Path $env:RUNNER_TEMP "tauri.sign.json"
+            @{ bundle = @{ windows = @{ certificateThumbprint = $cert.Thumbprint; digestAlgorithm = "sha256"; timestampUrl = "http://timestamp.digicert.com" } } } |
+              ConvertTo-Json -Depth 5 | Set-Content -Path $configFile -Encoding utf8
+            "TAURI_SIGN_CONFIG=--config $configFile" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            Write-Output "Windows signing enabled"
+          } else {
+            Write-Output "No Windows certificate: building unsigned"
+          }
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: FFXIV Trader ${{ github.ref_name }}
+          releaseBody: Unsigned build. See the README for how to open it on macOS.
+          releaseDraft: true
+          args: ${{ matrix.args }} ${{ env.TAURI_SIGN_CONFIG }}

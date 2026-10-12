@@ -281,6 +281,7 @@ export const api = {
   itemDetail: (itemId: number, refresh: boolean) =>
     invoke<ItemDetail>("item_detail", { itemId, refresh }),
   startScan: () => invoke<string>("start_scan"),
+  retryFailedScan: (scanId: string) => invoke<null>("retry_failed_scan", { scanId }),
   cancelScan: () => invoke<boolean>("cancel_scan"),
   scanProgress: () => invoke<ScanProgress | null>("scan_progress"),
   listScans: () => invoke<ScanRun[]>("list_scans"),

@@ -980,6 +980,84 @@ mod live_full {
     use crate::{db, net::Throttled, results, xivapi::XivApi};
 
     #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "hits the network"]
+    async fn live_retry_merges_into_scan() {
+        let pool = db::open_memory().await;
+        worlds::ensure_seeded(&pool).await.unwrap();
+        let s = Settings {
+            home_world_id: Some(83),
+            ..Settings::default()
+        };
+        settings::save(&pool, &s, &worlds::bundled()).await.unwrap();
+        let http = reqwest::Client::new();
+        let state = AppState {
+            universalis: Universalis::new(Throttled::new(http.clone()), pool.clone()),
+            xivapi: XivApi::new(
+                http,
+                pool.clone(),
+                std::env::temp_dir().join("ffxiv-trader-test-icons"),
+            ),
+            scans: ScanManager::default(),
+            watch: crate::watch::WatchManager::new().0,
+            db: pool.clone(),
+            data_dir: std::env::temp_dir(),
+            log_dir: std::env::temp_dir(),
+            _log_guard: None,
+        };
+        // A finished scan where 300 items "failed".
+        let failed: Vec<u32> = state
+            .universalis
+            .marketable()
+            .await
+            .unwrap()
+            .into_iter()
+            .skip(4000)
+            .take(300)
+            .collect();
+        sqlx::query(
+            "INSERT INTO scan_runs (scan_id, started_at, completed_at, items_scanned, items_failed,
+               opportunities_found, status, failed_items) VALUES ('s', 1, 2, 16845, 300, 0, 'done', ?)",
+        )
+        .bind(serde_json::to_string(&failed).unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+        let mut rep = Reporter {
+            sink: Box::new(|_| {}),
+            scan_id: "s".into(),
+            started: Instant::now(),
+            total: 0,
+            done: 0,
+            items_failed: 0,
+        };
+        run(
+            &state,
+            "s",
+            &Mode::Retry(failed),
+            &CancellationToken::new(),
+            &mut rep,
+        )
+        .await
+        .unwrap();
+        let (scanned, found, failed_n, status): (i64, i64, i64, String) = sqlx::query_as(
+            "SELECT items_scanned, opportunities_found, items_failed, status FROM scan_runs WHERE scan_id = 's'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let opps: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM opportunities WHERE scan_id = 's'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        println!("scanned={scanned} found={found} opps={opps} failed={failed_n} status={status}");
+        assert_eq!(scanned, 16845, "a retry keeps the original item count");
+        assert_eq!(found, opps);
+        assert_eq!(failed_n, 0);
+        assert!(opps > 0, "300 items should yield some opportunities");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     #[ignore = "hits the network for minutes"]
     async fn live_full_scan() {
         let pool = db::open_memory().await;
