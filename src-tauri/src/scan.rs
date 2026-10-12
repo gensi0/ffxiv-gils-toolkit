@@ -977,7 +977,7 @@ mod live {
 /// along with their opportunities and candidates. Errors are logged
 /// but never propagate — a pruning failure must not affect the scan result.
 async fn prune_old_scans(db: &SqlitePool, keep: i64) {
-    let result: Result<(), _> = async {
+    let result: Result<(), crate::error::AppError> = async {
         // Collect the IDs to delete (completed scans older than the `keep` newest).
         #[derive(sqlx::FromRow)]
         struct IdRow { scan_id: String }
