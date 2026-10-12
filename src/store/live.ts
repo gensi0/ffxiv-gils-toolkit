@@ -1,10 +1,12 @@
 import { create } from "zustand";
-import type { NetStatus, ScanProgress } from "@/lib/api";
+import type { NetStatus, ScanProgress, WsStatus } from "@/lib/api";
 
 /** Live backend state pushed through Tauri events (see useBackendEvents). */
 interface LiveState {
   scan: ScanProgress | null;
   net: NetStatus | null;
+  ws: WsStatus | null;
+  setWs: (ws: WsStatus) => void;
   setScan: (scan: ScanProgress) => void;
   setNet: (net: NetStatus) => void;
 }
@@ -12,6 +14,10 @@ interface LiveState {
 export const useLive = create<LiveState>()((set) => ({
   scan: null,
   net: null,
+  ws: null,
+  setWs: (ws) => {
+    set({ ws });
+  },
   setScan: (scan) => {
     set({ scan });
   },

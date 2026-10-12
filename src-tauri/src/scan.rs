@@ -936,6 +936,7 @@ mod live_full {
                 std::env::temp_dir().join("ffxiv-trader-test-icons"),
             ),
             scans: ScanManager::default(),
+            watch: crate::watch::WatchManager::new().0,
             db: pool.clone(),
             data_dir: std::env::temp_dir(),
             log_dir: std::env::temp_dir(),

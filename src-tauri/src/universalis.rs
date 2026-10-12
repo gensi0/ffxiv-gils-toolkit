@@ -125,6 +125,9 @@ pub struct Listing {
     /// Present for DC/region queries.
     #[serde(rename = "worldID")]
     pub world_id: Option<i64>,
+    /// Stable id, used to apply WebSocket `listings/remove` events.
+    #[serde(rename = "listingID")]
+    pub listing_id: Option<String>,
 }
 
 // ---------- /history/{scope}/{ids} ----------

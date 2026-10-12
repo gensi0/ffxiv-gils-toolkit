@@ -11,6 +11,7 @@ mod scan;
 mod scope;
 mod settings;
 mod universalis;
+mod watch;
 mod worlds;
 mod xivapi;
 
@@ -32,6 +33,7 @@ pub struct AppState {
     pub universalis: universalis::Universalis,
     pub xivapi: xivapi::XivApi,
     pub scans: scan::ScanManager,
+    pub watch: watch::WatchManager,
     pub data_dir: PathBuf,
     pub log_dir: PathBuf,
     _log_guard: Option<WorkerGuard>,
@@ -119,6 +121,7 @@ async fn maybe_scheduled_scan(app: &AppHandle) -> error::AppResult<()> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .register_asynchronous_uri_scheme_protocol("icon", |ctx, request, responder| {
             // icon://localhost/<percent-encoded XIVAPI icon path>
             let app = ctx.app_handle().clone();
@@ -166,6 +169,7 @@ pub fn run() {
                 .gzip(true)
                 .build()?;
 
+            let (watch, watch_rx) = watch::WatchManager::new();
             app.manage(AppState {
                 universalis: universalis::Universalis::new(
                     net::Throttled::new(http.clone()),
@@ -173,12 +177,14 @@ pub fn run() {
                 ),
                 xivapi: xivapi::XivApi::new(http.clone(), db.clone(), cache_dir.join("icons")),
                 scans: scan::ScanManager::default(),
+                watch,
                 db,
                 data_dir,
                 log_dir,
                 _log_guard: log_guard,
             });
             spawn_background(app.handle(), http);
+            tauri::async_runtime::spawn(watch::run(app.handle().clone(), watch_rx));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -196,6 +202,11 @@ pub fn run() {
             commands::list_scans,
             commands::scan_results,
             commands::scan_candidates,
+            commands::watchlist_list,
+            commands::watchlist_add,
+            commands::watchlist_remove,
+            commands::watchlist_set_threshold,
+            commands::ws_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

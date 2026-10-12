@@ -8,6 +8,7 @@ use crate::net::NetStatus;
 use crate::results::{self, CandidateView, ScanResults, ScanRun};
 use crate::scan::{self, ScanProgress};
 use crate::settings::{self, Settings};
+use crate::watch::{self, WatchView, WsStatus};
 use crate::worlds::{self, World};
 use crate::xivapi::SearchHit;
 use crate::AppState;
@@ -27,6 +28,7 @@ pub async fn save_settings(state: State<'_, AppState>, settings: Settings) -> Ap
     let worlds = worlds::load(&state.db).await?;
     settings::save(&state.db, &settings, &worlds).await?;
     tracing::info!(home_world = ?settings.home_world_id, "settings saved");
+    state.watch.send(watch::Cmd::Reload);
     settings::load(&state.db).await
 }
 
@@ -119,4 +121,33 @@ pub async fn scan_candidates(
     let settings = settings::load(&state.db).await?;
     let worlds = worlds::load(&state.db).await?;
     results::scan_candidates(&state.db, &state.xivapi, &settings, &worlds, &scan_id, 300).await
+}
+
+#[tauri::command]
+pub async fn watchlist_list(state: State<'_, AppState>) -> AppResult<Vec<WatchView>> {
+    watch::list(&state).await
+}
+
+#[tauri::command]
+pub async fn watchlist_add(state: State<'_, AppState>, item_id: u32) -> AppResult<()> {
+    watch::add(&state, item_id).await
+}
+
+#[tauri::command]
+pub async fn watchlist_remove(state: State<'_, AppState>, item_id: u32) -> AppResult<()> {
+    watch::remove(&state, item_id).await
+}
+
+#[tauri::command]
+pub async fn watchlist_set_threshold(
+    state: State<'_, AppState>,
+    item_id: u32,
+    profit: Option<i64>,
+) -> AppResult<()> {
+    watch::set_threshold(&state, item_id, profit).await
+}
+
+#[tauri::command]
+pub fn ws_status(state: State<'_, AppState>) -> WsStatus {
+    state.watch.status()
 }

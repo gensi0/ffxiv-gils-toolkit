@@ -5,8 +5,9 @@ arbitrage: items cheaper on another world or data center than on your home
 world, that your home market will actually absorb within a few days. It ranks
 opportunities by expected gil per day, not by raw price gap.
 
-Status: **M4** — settings, item search, item detail, full scan with drill-down
-and the profit math. Watchlist (M5) and travel grouping/charts/CI (M6) are next.
+Status: **M5** — settings, item search, item detail, full scan with drill-down
+and the profit math, live watchlist over the Universalis WebSocket with desktop
+notifications. Travel grouping, charts and CI builds (M6) are next.
 Full spec: [`ffxiv-arbitrage-scanner-prompt.md`](ffxiv-arbitrage-scanner-prompt.md).
 
 ## The math in 90 seconds

@@ -83,6 +83,7 @@ interface NumberFields {
   minMarginPct: string;
   drillDownTopN: string;
   scanIntervalHours: string;
+  watchNotifyProfit: string;
 }
 
 const NUMBER_RULES: Record<keyof NumberFields, { integer: boolean; min: number }> = {
@@ -95,6 +96,7 @@ const NUMBER_RULES: Record<keyof NumberFields, { integer: boolean; min: number }
   minMarginPct: { integer: false, min: 0 },
   drillDownTopN: { integer: true, min: 1 },
   scanIntervalHours: { integer: true, min: 0 },
+  watchNotifyProfit: { integer: true, min: 0 },
 };
 
 function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: boolean }) {
@@ -115,7 +117,9 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
     minMarginPct: String(Math.round(initial.minMargin * 1000) / 10),
     drillDownTopN: String(initial.drillDownTopN),
     scanIntervalHours: String(initial.scanIntervalHours),
+    watchNotifyProfit: String(initial.watchNotifyProfit),
   }));
+  const [notificationsEnabled, setNotificationsEnabled] = useState(initial.notificationsEnabled);
 
   const grouped = useMemo(() => groupWorlds(worlds), [worlds]);
   const home = worlds.find((w) => w.id === homeWorldId);
@@ -154,6 +158,8 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
         minMargin: parsed.minMarginPct !== null ? parsed.minMarginPct / 100 : initial.minMargin,
         drillDownTopN: n("drillDownTopN"),
         scanIntervalHours: n("scanIntervalHours"),
+        notificationsEnabled,
+        watchNotifyProfit: n("watchNotifyProfit"),
         theme,
       },
       {
@@ -320,6 +326,26 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
               {numberInput("minMarginPct", "Min margin (%)", "Prefilter: estimated profit / cost.")}
               {numberInput("drillDownTopN", "Items analyzed in depth", "Top prefilter candidates.")}
               {numberInput("scanIntervalHours", "Auto-scan every (h)", "0 = off.")}
+            </div>
+          </Section>
+
+          <Section title="Watchlist">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="notifications"
+                checked={notificationsEnabled}
+                onCheckedChange={(c) => {
+                  setNotificationsEnabled(c === true);
+                }}
+              />
+              <Label htmlFor="notifications">Desktop notifications on big movers</Label>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {numberInput(
+                "watchNotifyProfit",
+                "Notify above (gil / trip)",
+                "Default; each item can override it.",
+              )}
             </div>
           </Section>
 

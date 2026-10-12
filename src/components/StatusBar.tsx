@@ -1,34 +1,28 @@
-import { useEffect, useState } from "react";
+import { useNow } from "@/lib/hooks";
 import { useSettings, useWorlds, isRunning } from "@/lib/queries";
 import { PHASE_LABEL } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useLive } from "@/store/live";
-
-/** Current time, refreshed every second while `active` (for countdowns). */
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    const t = setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
-    return () => {
-      clearInterval(t);
-    };
-  }, [active]);
-  return now;
-}
 
 export function StatusBar() {
   const { data: settings } = useSettings();
   const { data: worlds } = useWorlds();
   const net = useLive((s) => s.net);
   const scan = useLive((s) => s.scan);
+  const ws = useLive((s) => s.ws);
   const home = worlds?.find((w) => w.id === settings?.homeWorldId);
 
   const backoffUntil = net?.backoffUntilMs ?? null;
-  const now = useNow(backoffUntil !== null);
+  const now = useNow(backoffUntil !== null || ws?.state === "disconnected");
   const backoffSecs = backoffUntil !== null ? Math.ceil((backoffUntil - now) / 1000) : 0;
+  const wsLabel =
+    ws?.state === "connected"
+      ? "Live: connected"
+      : ws?.state === "connecting"
+        ? "Live: connecting…"
+        : ws?.state === "disconnected"
+          ? `Live: reconnecting in ${Math.max(0, Math.ceil((ws.retryAtMs - now) / 1000))}s`
+          : null;
   const netLabel =
     backoffSecs > 0
       ? `Universalis: rate limited, retrying in ${backoffSecs}s`
@@ -51,7 +45,14 @@ export function StatusBar() {
       <span className={cn("ml-auto", backoffSecs > 0 && "text-amber-600 dark:text-amber-400")}>
         {netLabel}
       </span>
-      {/* WebSocket state lands here in M5. */}
+      {wsLabel && (
+        <span
+          className={cn(ws?.state === "disconnected" && "text-amber-600 dark:text-amber-400")}
+          title={ws?.state === "disconnected" ? ws.error : undefined}
+        >
+          {wsLabel}
+        </span>
+      )}
     </footer>
   );
 }

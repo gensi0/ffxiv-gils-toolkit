@@ -39,6 +39,8 @@ export interface Settings {
   minMargin: number;
   drillDownTopN: number;
   scanIntervalHours: number;
+  notificationsEnabled: boolean;
+  watchNotifyProfit: number;
   theme: Theme;
 }
 
@@ -228,11 +230,36 @@ export interface Candidate {
   sourceUploadMs: number | null;
 }
 
+export type WatchChange = "new" | "up" | "down";
+
+export interface WatchItem {
+  itemId: number;
+  item: ItemInfo | null;
+  addedAt: number;
+  notifyAboveProfit: number | null;
+  loaded: boolean;
+  error: string | null;
+  best: ArbitrageRow | null;
+  homeMinNq: number | null;
+  homeMinHq: number | null;
+  change: WatchChange | null;
+  changedAt: number | null;
+  lastEventMs: number | null;
+}
+
+export type WsStatus =
+  | { state: "idle" }
+  | { state: "connecting" }
+  | { state: "connected"; subscriptions: number }
+  | { state: "disconnected"; retryAtMs: number; error: string };
+
 /** Events emitted by the backend. */
 export const EVENTS = {
   worldsUpdated: "worlds-updated",
   netStatus: "net-status",
   scanProgress: "scan-progress",
+  watchUpdate: "watch-update",
+  wsStatus: "ws-status",
 } as const;
 
 export const api = {
@@ -251,6 +278,12 @@ export const api = {
   listScans: () => invoke<ScanRun[]>("list_scans"),
   scanResults: (scanId: string | null) => invoke<ScanResults | null>("scan_results", { scanId }),
   scanCandidates: (scanId: string) => invoke<Candidate[]>("scan_candidates", { scanId }),
+  watchlist: () => invoke<WatchItem[]>("watchlist_list"),
+  watchAdd: (itemId: number) => invoke<null>("watchlist_add", { itemId }),
+  watchRemove: (itemId: number) => invoke<null>("watchlist_remove", { itemId }),
+  watchSetThreshold: (itemId: number, profit: number | null) =>
+    invoke<null>("watchlist_set_threshold", { itemId, profit }),
+  wsStatus: () => invoke<WsStatus>("ws_status"),
 };
 
 /** Tauri rejects with the serialized AppError, which is a plain string. */

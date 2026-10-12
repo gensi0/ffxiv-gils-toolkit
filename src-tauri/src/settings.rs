@@ -73,6 +73,10 @@ pub struct Settings {
     pub drill_down_top_n: u32,
     /// Automatic re-scan interval; 0 disables it.
     pub scan_interval_hours: u32,
+    /// Desktop notification when a watched item's profit per trip jumps.
+    pub notifications_enabled: bool,
+    /// Default notification threshold (profit per trip, gil) for watched items.
+    pub watch_notify_profit: i64,
     pub theme: Theme,
 }
 
@@ -92,6 +96,8 @@ impl Default for Settings {
             min_margin: 0.20,
             drill_down_top_n: 200,
             scan_interval_hours: 0,
+            notifications_enabled: true,
+            watch_notify_profit: 100_000,
             theme: Theme::Dark,
         }
     }
@@ -131,6 +137,9 @@ impl Settings {
         }
         if !(1..=2000).contains(&self.drill_down_top_n) {
             return invalid("drill-down size must be between 1 and 2000".into());
+        }
+        if self.watch_notify_profit < 0 {
+            return invalid("notification threshold must be >= 0".into());
         }
         if self.max_data_age_hours == 0 {
             return invalid("data freshness limit must be at least 1 hour".into());
@@ -214,6 +223,8 @@ mod tests {
             min_margin: 0.3,
             drill_down_top_n: 150,
             scan_interval_hours: 6,
+            notifications_enabled: false,
+            watch_notify_profit: 250_000,
             theme: Theme::Light,
             ..chaos_home()
         };

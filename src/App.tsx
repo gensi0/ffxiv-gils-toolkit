@@ -9,7 +9,7 @@ import { type Page, useNav } from "@/store/nav";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { HistoryPage } from "@/pages/HistoryPage";
 import { ItemPage } from "@/pages/ItemPage";
-import { WatchlistPage } from "@/pages/Placeholders";
+import { WatchlistPage } from "@/pages/WatchlistPage";
 import { ScanPage } from "@/pages/ScanPage";
 import { SearchPage } from "@/pages/SearchPage";
 import { SettingsPage } from "@/pages/SettingsPage";

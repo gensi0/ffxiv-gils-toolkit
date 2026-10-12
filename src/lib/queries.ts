@@ -1,7 +1,15 @@
 import { useEffect } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
-import { api, EVENTS, type NetStatus, type ScanProgress, type Settings } from "./api";
+import {
+  api,
+  EVENTS,
+  type NetStatus,
+  type ScanProgress,
+  type Settings,
+  type WatchItem,
+  type WsStatus,
+} from "./api";
 import { useLive } from "@/store/live";
 
 // The Rust side owns the real cache (SQLite); keep the client cache short.
@@ -70,7 +78,8 @@ export const useScans = () =>
 export function useBackendEvents() {
   const qc = useQueryClient();
   useEffect(() => {
-    const { setScan, setNet } = useLive.getState();
+    const { setScan, setNet, setWs } = useLive.getState();
+    void api.wsStatus().then(setWs);
     void api.scanProgress().then((p) => {
       if (p) setScan(p);
     });
@@ -81,6 +90,15 @@ export function useBackendEvents() {
       }),
       listen<NetStatus>(EVENTS.netStatus, (e) => {
         setNet(e.payload);
+      }),
+      listen<WsStatus>(EVENTS.wsStatus, (e) => {
+        setWs(e.payload);
+      }),
+      // Live watchlist rows replace their cached counterpart in place.
+      listen<WatchItem>(EVENTS.watchUpdate, (e) => {
+        qc.setQueryData<WatchItem[]>(["watchlist"], (rows) =>
+          rows?.map((r) => (r.itemId === e.payload.itemId ? e.payload : r)),
+        );
       }),
       listen<ScanProgress>(EVENTS.scanProgress, (e) => {
         setScan(e.payload);
@@ -99,3 +117,29 @@ export function useBackendEvents() {
 
 export const isRunning = (p: ScanProgress | null) =>
   p !== null && p.phase !== "done" && p.phase !== "failed" && p.phase !== "cancelled";
+
+export const useWatchlist = () =>
+  useQuery({ queryKey: ["watchlist"], queryFn: api.watchlist, ...SHORT });
+
+/** Star / unstar an item. */
+export function useToggleWatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, watched }: { itemId: number; watched: boolean }) =>
+      watched ? api.watchRemove(itemId) : api.watchAdd(itemId),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["watchlist"] });
+    },
+  });
+}
+
+export function useSetWatchThreshold() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, profit }: { itemId: number; profit: number | null }) =>
+      api.watchSetThreshold(itemId, profit),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["watchlist"] });
+    },
+  });
+}
