@@ -79,6 +79,10 @@ interface NumberFields {
   minUnitsPerDay: string;
   sellHorizonDays: string;
   maxDataAgeHours: string;
+  /** Shown as a percentage; stored as a ratio. */
+  minMarginPct: string;
+  drillDownTopN: string;
+  scanIntervalHours: string;
 }
 
 const NUMBER_RULES: Record<keyof NumberFields, { integer: boolean; min: number }> = {
@@ -88,6 +92,9 @@ const NUMBER_RULES: Record<keyof NumberFields, { integer: boolean; min: number }
   minUnitsPerDay: { integer: false, min: 0 },
   sellHorizonDays: { integer: true, min: 1 },
   maxDataAgeHours: { integer: true, min: 1 },
+  minMarginPct: { integer: false, min: 0 },
+  drillDownTopN: { integer: true, min: 1 },
+  scanIntervalHours: { integer: true, min: 0 },
 };
 
 function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: boolean }) {
@@ -105,6 +112,9 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
     minUnitsPerDay: String(initial.minUnitsPerDay),
     sellHorizonDays: String(initial.sellHorizonDays),
     maxDataAgeHours: String(initial.maxDataAgeHours),
+    minMarginPct: String(Math.round(initial.minMargin * 1000) / 10),
+    drillDownTopN: String(initial.drillDownTopN),
+    scanIntervalHours: String(initial.scanIntervalHours),
   }));
 
   const grouped = useMemo(() => groupWorlds(worlds), [worlds]);
@@ -128,7 +138,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
   function onSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!valid) return;
-    const n = (k: keyof NumberFields) => parsed[k] ?? initial[k];
+    const n = (k: Exclude<keyof NumberFields, "minMarginPct">) => parsed[k] ?? initial[k];
     save.mutate(
       {
         homeWorldId,
@@ -141,6 +151,9 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
         minUnitsPerDay: n("minUnitsPerDay"),
         sellHorizonDays: n("sellHorizonDays"),
         maxDataAgeHours: n("maxDataAgeHours"),
+        minMargin: parsed.minMarginPct !== null ? parsed.minMarginPct / 100 : initial.minMargin,
+        drillDownTopN: n("drillDownTopN"),
+        scanIntervalHours: n("scanIntervalHours"),
         theme,
       },
       {
@@ -299,6 +312,14 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                 "Data freshness limit (h)",
                 "Skip source and home worlds with older uploads.",
               )}
+            </div>
+          </Section>
+
+          <Section title="Scan">
+            <div className="grid grid-cols-3 gap-3">
+              {numberInput("minMarginPct", "Min margin (%)", "Prefilter: estimated profit / cost.")}
+              {numberInput("drillDownTopN", "Items analyzed in depth", "Top prefilter candidates.")}
+              {numberInput("scanIntervalHours", "Auto-scan every (h)", "0 = off.")}
             </div>
           </Section>
 

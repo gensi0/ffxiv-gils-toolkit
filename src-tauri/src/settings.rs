@@ -67,6 +67,12 @@ pub struct Settings {
     pub sell_horizon_days: u32,
     /// Worlds (source and home) whose last upload is older are ignored.
     pub max_data_age_hours: u32,
+    /// Scan prefilter: minimum estimated profit / cost.
+    pub min_margin: f64,
+    /// Scan: how many prefiltered items get the full drill-down.
+    pub drill_down_top_n: u32,
+    /// Automatic re-scan interval; 0 disables it.
+    pub scan_interval_hours: u32,
     pub theme: Theme,
 }
 
@@ -83,6 +89,9 @@ impl Default for Settings {
             min_units_per_day: 1.0,
             sell_horizon_days: 3,
             max_data_age_hours: 24,
+            min_margin: 0.20,
+            drill_down_top_n: 200,
+            scan_interval_hours: 0,
             theme: Theme::Dark,
         }
     }
@@ -116,6 +125,12 @@ impl Settings {
         }
         if self.sell_horizon_days == 0 {
             return invalid("sell horizon must be at least 1 day".into());
+        }
+        if !self.min_margin.is_finite() || self.min_margin < 0.0 {
+            return invalid("minimum margin must be >= 0".into());
+        }
+        if !(1..=2000).contains(&self.drill_down_top_n) {
+            return invalid("drill-down size must be between 1 and 2000".into());
         }
         if self.max_data_age_hours == 0 {
             return invalid("data freshness limit must be at least 1 hour".into());
@@ -196,6 +211,9 @@ mod tests {
             min_units_per_day: 2.5,
             sell_horizon_days: 5,
             max_data_age_hours: 12,
+            min_margin: 0.3,
+            drill_down_top_n: 150,
+            scan_interval_hours: 6,
             theme: Theme::Light,
             ..chaos_home()
         };

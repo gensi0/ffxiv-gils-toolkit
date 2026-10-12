@@ -4,15 +4,14 @@ import { StatusBar } from "@/components/StatusBar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useSettings, useWorldsUpdatedListener } from "@/lib/queries";
+import { useBackendEvents, useSettings } from "@/lib/queries";
 import { type Page, useNav } from "@/store/nav";
-import {
-  DashboardPage,
-  HistoryPage,
-  ScanPage,
-  SearchPage,
-  WatchlistPage,
-} from "@/pages/Placeholders";
+import { DashboardPage } from "@/pages/DashboardPage";
+import { HistoryPage } from "@/pages/HistoryPage";
+import { ItemPage } from "@/pages/ItemPage";
+import { WatchlistPage } from "@/pages/Placeholders";
+import { ScanPage } from "@/pages/ScanPage";
+import { SearchPage } from "@/pages/SearchPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 
 const PAGES: Record<Page, React.ComponentType> = {
@@ -22,13 +21,14 @@ const PAGES: Record<Page, React.ComponentType> = {
   search: SearchPage,
   history: HistoryPage,
   settings: SettingsPage,
+  item: ItemPage,
 };
 
 export default function App() {
   const settings = useSettings();
   const page = useNav((s) => s.page);
   const theme = settings.data?.theme ?? "dark";
-  useWorldsUpdatedListener();
+  useBackendEvents();
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
