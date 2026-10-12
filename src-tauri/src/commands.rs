@@ -8,6 +8,7 @@ use crate::net::NetStatus;
 use crate::results::{self, CandidateView, ScanResults, ScanRun};
 use crate::scan::{self, ScanProgress};
 use crate::settings::{self, Settings};
+use crate::stats::{self, MarketStats};
 use crate::watch::{self, WatchView, WsStatus};
 use crate::worlds::{self, World};
 use crate::xivapi::SearchHit;
@@ -155,4 +156,9 @@ pub fn ws_status(state: State<'_, AppState>) -> WsStatus {
 #[tauri::command]
 pub async fn retry_failed_scan(app: AppHandle, scan_id: String) -> AppResult<()> {
     scan::retry_failed(&app, &scan_id).await
+}
+
+#[tauri::command]
+pub async fn market_stats(state: State<'_, AppState>) -> AppResult<MarketStats> {
+    stats::market_stats(&state.db).await
 }

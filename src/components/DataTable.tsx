@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useTable, type RowData, type SortingState } from "@tanstack/react-table";
+import { useTable, type RowData, type SortingState, type Updater } from "@tanstack/react-table";
 import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import { tableFeaturesSorted, type Column } from "@/lib/table";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,8 @@ interface Props<T extends RowData> {
   columns: Column<T>[];
   data: T[];
   initialSorting?: SortingState;
+  sorting?: SortingState;
+  onSortingChange?: (s: SortingState) => void;
   onRowClick?: (row: T) => void;
   rowClassName?: (row: T) => string | undefined;
   getRowId?: (row: T, index: number) => string;
@@ -18,11 +20,19 @@ export function DataTable<T extends RowData>({
   columns,
   data,
   initialSorting = [],
+  sorting: externalSorting,
+  onSortingChange: externalOnSortingChange,
   onRowClick,
   rowClassName,
   getRowId,
 }: Props<T>) {
-  const [sorting, setSorting] = useState<SortingState>(initialSorting);
+  const [internalSorting, setInternalSorting] = useState<SortingState>(initialSorting);
+  const sorting = externalSorting ?? internalSorting;
+  const setSorting = (updater: Updater<SortingState>) => {
+    const next = typeof updater === "function" ? updater(sorting) : updater;
+    if (externalOnSortingChange) externalOnSortingChange(next);
+    else setInternalSorting(next);
+  };
   const table = useTable({
     features: tableFeaturesSorted,
     columns,

@@ -1,15 +1,11 @@
 import { useMemo, useState } from "react";
+import { Popover } from "radix-ui";
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/DataTable";
@@ -20,14 +16,13 @@ import { ScanButton, ScanProgressBar } from "@/components/ScanControls";
 import { TripCards } from "@/components/TripCards";
 import { api, errorMessage, type Candidate, type Opportunity, type ScanResults } from "@/lib/api";
 import { ago, decimal, gil } from "@/lib/format";
-import { isRunning, useScanCandidates, useScanResults } from "@/lib/queries";
+import { isRunning, useScanCandidates, useScanResults, useWorlds } from "@/lib/queries";
 import { useLive } from "@/store/live";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useNav } from "@/store/nav";
-
-const ALL = "__all__";
+import { useScanFilters } from "@/store/scanFilters";
 
 export function ScanPage() {
   const scanId = useNav((s) => s.scanId);
@@ -183,6 +178,7 @@ const opportunityColumns = [
   oc.accessor("confidence", {
     header: "Confidence",
     cell: (c) => <ConfidenceBadge value={c.getValue()} />,
+    sortFn: "confidence",
   }),
   oc.accessor("sourceUploadMs", {
     header: "Data age",
@@ -195,13 +191,32 @@ const opportunityColumns = [
   }),
 ];
 
+const CONFIDENCE_OPTIONS = ["HOT", "OK", "COMPETITIVE", "SATURATED", "SLOW"];
+
 function OpportunityView({ r }: { r: ScanResults }) {
   const openItem = useNav((s) => s.openItem);
-  const [category, setCategory] = useState(ALL);
-  const [dc, setDc] = useState(ALL);
-  const [hqOnly, setHqOnly] = useState(false);
-  const [minProfit, setMinProfit] = useState("");
+  const worlds = useWorlds();
+
+  // Persistent filters & sorting via Zustand store
+  const {
+    category, setCategory,
+    selRegions, setSelRegions,
+    selDcs, setSelDcs,
+    selWorlds, setSelWorlds,
+    selConfidence, setSelConfidence,
+    hqOnly, setHqOnly,
+    minProfit, setMinProfit,
+    sorting, setSorting,
+  } = useScanFilters();
+
   const [grouped, setGrouped] = useState(false);
+
+  // Build DC→region lookup from worlds data
+  const dcToRegion = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const w of worlds.data ?? []) map.set(w.dc, w.region);
+    return map;
+  }, [worlds.data]);
 
   const categories = useMemo(
     () =>
@@ -210,21 +225,60 @@ function OpportunityView({ r }: { r: ScanResults }) {
       ].sort(),
     [r.opportunities],
   );
-  const dcs = useMemo(
-    () => [...new Set(r.opportunities.map((o) => o.sourceDc))].sort(),
-    [r.opportunities],
+
+  const regions = useMemo(
+    () => [...new Set(r.opportunities.map((o) => dcToRegion.get(o.sourceDc) ?? "Unknown"))].sort(),
+    [r.opportunities, dcToRegion],
   );
+
+  // DCs filtered by selected regions
+  const dcs = useMemo(() => {
+    const all = [...new Set(r.opportunities.map((o) => o.sourceDc))].sort();
+    if (selRegions.length === 0) return all;
+    return all.filter((d) => selRegions.includes(dcToRegion.get(d) ?? "Unknown"));
+  }, [r.opportunities, selRegions, dcToRegion]);
+
+  // Worlds filtered by selected DCs (and regions)
+  const availableWorlds = useMemo(() => {
+    const all = [...new Set(r.opportunities.map((o) => o.sourceWorld))].sort();
+    if (selDcs.length > 0) return all.filter((w) => {
+      const opp = r.opportunities.find((o) => o.sourceWorld === w);
+      return opp ? selDcs.includes(opp.sourceDc) : false;
+    });
+    if (selRegions.length > 0) return all.filter((w) => {
+      const opp = r.opportunities.find((o) => o.sourceWorld === w);
+      return opp ? selRegions.includes(dcToRegion.get(opp.sourceDc) ?? "Unknown") : false;
+    });
+    return all;
+  }, [r.opportunities, selDcs, selRegions, dcToRegion]);
+
+  // Cascade: when regions change, drop DCs/worlds no longer valid
+  const handleRegionChange = (v: string[]) => {
+    setSelRegions(v);
+    if (v.length > 0) {
+      setSelDcs(selDcs.filter((d) => v.includes(dcToRegion.get(d) ?? "Unknown")));
+      setSelWorlds([]);
+    }
+  };
+  const handleDcChange = (v: string[]) => {
+    setSelDcs(v);
+    if (v.length > 0) setSelWorlds([]);
+  };
+
   const minProfitValue = Number(minProfit.replace(/[\s,_]/g, "")) || 0;
   const rows = useMemo(
     () =>
       r.opportunities.filter(
         (o) =>
-          (category === ALL || o.item.category === category) &&
-          (dc === ALL || o.sourceDc === dc) &&
+          (category.length === 0 || category.includes(o.item.category ?? "")) &&
+          (selRegions.length === 0 || selRegions.includes(dcToRegion.get(o.sourceDc) ?? "Unknown")) &&
+          (selDcs.length === 0 || selDcs.includes(o.sourceDc)) &&
+          (selWorlds.length === 0 || selWorlds.includes(o.sourceWorld)) &&
+          (selConfidence.length === 0 || selConfidence.includes(o.confidence)) &&
           (!hqOnly || o.quality === "HQ") &&
           o.profitPerTrip >= minProfitValue,
       ),
-    [r.opportunities, category, dc, hqOnly, minProfitValue],
+    [r.opportunities, category, selRegions, selDcs, selWorlds, hqOnly, minProfitValue, dcToRegion],
   );
 
   if (r.opportunities.length === 0) {
@@ -249,13 +303,21 @@ function OpportunityView({ r }: { r: ScanResults }) {
           </span>
         ) : (
           <>
-            <FilterSelect
-              value={category}
-              onChange={setCategory}
-              all="All categories"
-              options={categories}
-            />
-            <FilterSelect value={dc} onChange={setDc} all="All source DCs" options={dcs} />
+          <MultiSelect
+            value={category}
+            onChange={setCategory}
+            all="All categories"
+            options={categories}
+          />
+          <MultiSelect
+            value={selRegions}
+            onChange={handleRegionChange}
+            all="All regions"
+            options={regions}
+          />
+          <MultiSelect value={selDcs} onChange={handleDcChange} all="All DCs" options={dcs} />
+            <MultiSelect value={selWorlds} onChange={setSelWorlds} all="All servers" options={availableWorlds} />
+            <MultiSelect value={selConfidence} onChange={setSelConfidence} all="All confidence" options={CONFIDENCE_OPTIONS} />
             <Input
               placeholder="Min profit / trip"
               inputMode="numeric"
@@ -287,7 +349,8 @@ function OpportunityView({ r }: { r: ScanResults }) {
         <DataTable
           columns={opportunityColumns}
           data={rows}
-          initialSorting={[{ id: "dailyProfit", desc: true }]}
+          sorting={sorting}
+          onSortingChange={setSorting}
           getRowId={(o) => `${o.item.id}-${o.quality}-${o.sourceWorldId}`}
           onRowClick={(o) => {
             openItem(o.item.id);
@@ -298,26 +361,74 @@ function OpportunityView({ r }: { r: ScanResults }) {
   );
 }
 
-function FilterSelect(props: {
-  value: string;
-  onChange: (v: string) => void;
+function MultiSelect({
+  all,
+  options,
+  value,
+  onChange,
+}: {
   all: string;
   options: string[];
+  value: string[];
+  onChange: (v: string[]) => void;
 }) {
+  const toggle = (opt: string) => {
+    onChange(value.includes(opt) ? value.filter((v) => v !== opt) : [...value, opt]);
+  };
+  const label =
+    value.length === 0
+      ? all
+      : value.length === 1
+        ? value[0]
+        : `${value.length} selected`;
+
   return (
-    <Select value={props.value} onValueChange={props.onChange}>
-      <SelectTrigger size="sm" className="w-44">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent className="max-h-72">
-        <SelectItem value={ALL}>{props.all}</SelectItem>
-        {props.options.map((o) => (
-          <SelectItem key={o} value={o}>
-            {o}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <Popover.Root>
+      <Popover.Trigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(
+            "h-7 w-40 justify-between px-2 text-xs font-normal",
+            value.length > 0 && "border-primary/60 text-foreground",
+          )}
+        >
+          <span className="truncate">{label}</span>
+          <ChevronDownIcon className="ml-1 size-3 shrink-0 text-muted-foreground" />
+        </Button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="start"
+          sideOffset={4}
+          className="z-50 max-h-72 w-48 overflow-y-auto rounded-lg border bg-popover p-1 shadow-md"
+        >
+          {value.length > 0 && (
+            <>
+              <button
+                onClick={() => onChange([])}
+                className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                Clear selection
+              </button>
+              <Separator className="my-1" />
+            </>
+          )}
+          {options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => toggle(opt)}
+              className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-muted"
+            >
+              <span className="flex size-3.5 shrink-0 items-center justify-center rounded-sm border border-muted-foreground/40">
+                {value.includes(opt) && <CheckIcon className="size-3" />}
+              </span>
+              <span className="truncate">{opt}</span>
+            </button>
+          ))}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 

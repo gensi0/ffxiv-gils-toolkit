@@ -238,6 +238,78 @@ export interface Candidate {
   sourceUploadMs: number | null;
 }
 
+// ---------- stats ----------
+
+export interface WorldStat {
+  worldId: number;
+  worldName: string;
+  dc: string;
+  totalOpps: number;
+  totalDailyProfit: number;
+  avgUnitProfit: number;
+  avgGapPct: number;
+  bestConfidence: Confidence;
+}
+
+export interface DcStat {
+  dc: string;
+  worldCount: number;
+  totalOpps: number;
+  totalDailyProfit: number;
+  avgGapPct: number;
+}
+
+export interface RegionStat {
+  region: string;
+  dcCount: number;
+  worldCount: number;
+  totalOpps: number;
+  totalDailyProfit: number;
+  avgGapPct: number;
+}
+
+export interface ConfidenceBucket {
+  label: Confidence;
+  count: number;
+  totalDailyProfit: number;
+}
+
+export interface TopItem {
+  itemId: number;
+  name: string;
+  scanCount: number;
+  avgUnitProfit: number;
+  maxDailyProfit: number;
+  bestConfidence: Confidence;
+}
+
+export interface ScanPoint {
+  startedAt: number;
+  opportunitiesFound: number;
+  totalDailyProfit: number;
+  itemsScanned: number;
+}
+
+export interface RatioBucket {
+  lower: number;
+  label: string;
+  count: number;
+}
+
+export interface MarketStats {
+  totalScans: number;
+  totalOpportunities: number;
+  bestScanDailyProfit: number;
+  avgOppsPerScan: number;
+  worldRankings: WorldStat[];
+  dcRankings: DcStat[];
+  regionRankings: RegionStat[];
+  confidenceDist: ConfidenceBucket[];
+  topItems: TopItem[];
+  scanHistory: ScanPoint[];
+  profitRatioDist: RatioBucket[];
+}
+
 export type WatchChange = "new" | "up" | "down";
 
 export interface WatchItem {
@@ -293,6 +365,7 @@ export const api = {
   watchSetThreshold: (itemId: number, profit: number | null) =>
     invoke<null>("watchlist_set_threshold", { itemId, profit }),
   wsStatus: () => invoke<WsStatus>("ws_status"),
+  marketStats: () => invoke<MarketStats>("market_stats"),
 };
 
 /** Tauri rejects with the serialized AppError, which is a plain string. */
