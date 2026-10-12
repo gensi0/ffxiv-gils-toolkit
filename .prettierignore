@@ -1,0 +1,6 @@
+dist
+src-tauri/target
+src-tauri/gen
+src-tauri/data
+pnpm-lock.yaml
+ffxiv-arbitrage-scanner-prompt.md
