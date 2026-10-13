@@ -22,8 +22,6 @@ pub struct MarketStats {
     pub dc_rankings: Vec<DcStat>,
     pub region_rankings: Vec<RegionStat>,
     pub confidence_dist: Vec<ConfidenceBucket>,
-    pub top_items: Vec<TopItem>,
-    pub scan_history: Vec<ScanPoint>,
     pub profit_ratio_dist: Vec<RatioBucket>,
 }
 
@@ -67,26 +65,6 @@ pub struct ConfidenceBucket {
     pub label: String,
     pub count: i64,
     pub total_daily_profit: i64,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TopItem {
-    pub item_id: i64,
-    pub name: String,
-    pub scan_count: i64,
-    pub avg_unit_profit: f64,
-    pub max_daily_profit: i64,
-    pub best_confidence: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ScanPoint {
-    pub started_at: i64,
-    pub opportunities_found: i64,
-    pub total_daily_profit: i64,
-    pub items_scanned: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -150,24 +128,6 @@ struct ConfRow {
 }
 
 #[derive(sqlx::FromRow)]
-struct ItemRow {
-    item_id: i64,
-    name: String,
-    scan_count: i64,
-    avg_unit_profit: f64,
-    max_daily_profit: i64,
-    conf_rank: i64,
-}
-
-#[derive(sqlx::FromRow)]
-struct HistoryRow {
-    started_at: i64,
-    opportunities_found: i64,
-    total_daily_profit: i64,
-    items_scanned: i64,
-}
-
-#[derive(sqlx::FromRow)]
 struct RatioRow {
     b0: i64,
     b1: i64,
@@ -215,8 +175,6 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
             dc_rankings: vec![],
             region_rankings: vec![],
             confidence_dist: vec![],
-            top_items: vec![],
-            scan_history: vec![],
             profit_ratio_dist: vec![],
         });
     };
@@ -364,64 +322,6 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
         })
         .collect();
 
-    let item_rows: Vec<ItemRow> = sqlx::query_as(
-        "SELECT o.item_id,
-                COALESCE(xi.name_en, '') AS name,
-                COUNT(DISTINCT o.scan_id) AS scan_count,
-                COALESCE(AVG(CAST(o.unit_profit AS REAL)), 0.0) AS avg_unit_profit,
-                COALESCE(MAX(o.daily_profit), 0) AS max_daily_profit,
-                COALESCE(MAX(CASE o.confidence
-                    WHEN 'HOT' THEN 4 WHEN 'OK' THEN 3
-                    WHEN 'COMPETITIVE' THEN 2 WHEN 'SLOW' THEN 1
-                    ELSE 0 END), 0) AS conf_rank
-         FROM opportunities o
-         LEFT JOIN items xi ON xi.item_id = o.item_id
-         WHERE o.scan_id = ?
-         GROUP BY o.item_id
-         ORDER BY avg_unit_profit DESC
-         LIMIT 20",
-    )
-    .bind(scan_id)
-    .fetch_all(db)
-    .await?;
-
-    let top_items: Vec<TopItem> = item_rows
-        .into_iter()
-        .map(|r| TopItem {
-            item_id: r.item_id,
-            name: r.name,
-            scan_count: r.scan_count,
-            avg_unit_profit: r.avg_unit_profit,
-            max_daily_profit: r.max_daily_profit,
-            best_confidence: conf_label(r.conf_rank).to_string(),
-        })
-        .collect();
-
-    let history_rows: Vec<HistoryRow> = sqlx::query_as(
-        "SELECT r.started_at,
-                COALESCE(r.opportunities_found, 0) AS opportunities_found,
-                COALESCE(SUM(o.daily_profit), 0) AS total_daily_profit,
-                COALESCE(r.items_scanned, 0) AS items_scanned
-         FROM scan_runs r
-         LEFT JOIN opportunities o ON o.scan_id = r.scan_id
-         WHERE r.status = 'done'
-         GROUP BY r.scan_id
-         ORDER BY r.started_at ASC
-         LIMIT 50",
-    )
-    .fetch_all(db)
-    .await?;
-
-    let scan_history: Vec<ScanPoint> = history_rows
-        .into_iter()
-        .map(|r| ScanPoint {
-            started_at: r.started_at * 1000,
-            opportunities_found: r.opportunities_found,
-            total_daily_profit: r.total_daily_profit,
-            items_scanned: r.items_scanned,
-        })
-        .collect();
-
     let ratio: RatioRow = sqlx::query_as(
         "SELECT
            COALESCE(SUM(CASE WHEN home_median_price > 0
@@ -484,8 +384,6 @@ pub async fn market_stats(db: &SqlitePool) -> AppResult<MarketStats> {
         dc_rankings,
         region_rankings,
         confidence_dist,
-        top_items,
-        scan_history,
         profit_ratio_dist,
     })
 }

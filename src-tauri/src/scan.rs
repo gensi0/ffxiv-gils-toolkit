@@ -685,7 +685,7 @@ async fn run(
     }
     rep.done = rep.total;
     tracing::info!(scan_id, found, failed = failed.len(), "scan done");
-    prune_old_scans(db, 2).await;
+    prune_other_scans(db, scan_id).await;
     Ok(())
 }
 
@@ -975,30 +975,26 @@ mod live {
     }
 }
 
-/// Deletes all completed scans except the `keep` most recent ones,
-/// along with their opportunities and candidates. Errors are logged
-/// but never propagate — a pruning failure must not affect the scan result.
-async fn prune_old_scans(db: &SqlitePool, keep: i64) {
+/// Garde uniquement le scan qui vient de se terminer : les prix changent en
+/// quelques heures, un ancien scan ne sert plus à décider quoi acheter. Un scan
+/// en cours (relance des objets en échec) est conservé.
+async fn prune_other_scans(db: &SqlitePool, keep_id: &str) {
     let result: Result<(), crate::error::AppError> = async {
-        // Collect the IDs to delete (completed scans older than the `keep` newest).
         #[derive(sqlx::FromRow)]
         struct IdRow {
             scan_id: String,
         }
 
         let old: Vec<IdRow> = sqlx::query_as(
-            "SELECT scan_id FROM scan_runs
-             WHERE status = 'done'
-             ORDER BY started_at DESC
-             LIMIT -1 OFFSET ?",
+            "SELECT scan_id FROM scan_runs WHERE scan_id <> ? AND status <> 'running'",
         )
-        .bind(keep)
+        .bind(keep_id)
         .fetch_all(db)
         .await?;
 
         for row in old {
             let id = &row.scan_id;
-            sqlx::query("DELETE FROM opportunities    WHERE scan_id = ?")
+            sqlx::query("DELETE FROM opportunities WHERE scan_id = ?")
                 .bind(id)
                 .execute(db)
                 .await?;
@@ -1006,18 +1002,18 @@ async fn prune_old_scans(db: &SqlitePool, keep: i64) {
                 .bind(id)
                 .execute(db)
                 .await?;
-            sqlx::query("DELETE FROM scan_runs        WHERE scan_id = ?")
+            sqlx::query("DELETE FROM scan_runs WHERE scan_id = ?")
                 .bind(id)
                 .execute(db)
                 .await?;
-            tracing::debug!(scan_id = id, "pruned old scan");
+            tracing::debug!(scan_id = id, "ancien scan supprimé");
         }
         Ok(())
     }
     .await;
 
     if let Err(e) = result {
-        tracing::warn!(error = %e, "scan pruning failed (non-fatal)");
+        tracing::warn!(error = %e, "suppression des anciens scans impossible (sans gravité)");
     }
 }
 

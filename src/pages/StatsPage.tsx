@@ -2,8 +2,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   type PieLabelRenderProps,
@@ -127,116 +125,36 @@ export function StatsPage() {
     );
   }
 
-  const hasHistory = data.scanHistory.length > 0;
-
   return (
     <>
       <PageHeader title="Statistiques" />
       <div className="space-y-8 overflow-y-auto p-4">
         {/* ── Overview ── */}
         <Section title="Vue d'ensemble">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <StatCard
-              label="Scans au total"
-              value={data.totalScans.toString()}
-              tip="Nombre de scans complétés depuis le premier lancement."
-            />
-            <StatCard
-              label="Opportunités au total"
+              label="Opportunités"
               value={data.totalOpportunities.toLocaleString("fr-FR")}
-              sub={`~${data.avgOppsPerScan.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} par scan`}
-              tip="Nombre total d'opportunités d'arbitrage trouvées sur tous tes scans. Une opportunité = un objet moins cher sur un autre serveur que chez toi."
+              tip="Nombre d'opportunités d'arbitrage trouvées par le dernier scan. Une opportunité = un objet moins cher sur un autre serveur que chez toi."
             />
             <StatCard
-              label="Meilleur scan (gils/jour)"
+              label="Gils / jour potentiels"
               value={gil(data.bestScanDailyProfit)}
-              sub="total d'un seul scan"
-              tip="Meilleur scan en valeur totale : somme des profits journaliers estimés de toutes les opportunités trouvées dans ce scan."
+              tip="Somme des gils par jour estimés de toutes les opportunités du dernier scan, si tu les exploitais toutes."
             />
             <StatCard
               label="Serveurs sources distincts"
               value={data.worldRankings.length.toString()}
-              tip="Nombre de serveurs distincts qui ont produit au moins une opportunité d'achat sur l'ensemble de tes scans."
+              tip="Nombre de serveurs qui ont produit au moins une opportunité d'achat dans le dernier scan."
             />
           </div>
         </Section>
-
-        {/* ── Scan history ── */}
-        {hasHistory && (
-          <Section
-            title="Historique des scans — opportunités dans le temps"
-            tip="Évolution de tes scans dans le temps. Bleu = nb d'opportunités trouvées, orange = profit journalier total estimé (en milliers de gils)."
-          >
-            <div className="rounded-lg border bg-card p-3">
-              <ResponsiveContainer width="100%" height={160}>
-                <LineChart
-                  data={data.scanHistory.map((p) => ({
-                    date: new Date(p.startedAt).toLocaleDateString("fr", {
-                      month: "2-digit",
-                      day: "2-digit",
-                    }),
-                    opps: p.opportunitiesFound,
-                    profit: Math.round(p.totalDailyProfit / 1000),
-                  }))}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  />
-                  <YAxis
-                    yAxisId="opps"
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  />
-                  <YAxis
-                    yAxisId="profit"
-                    orientation="right"
-                    tickFormatter={(v: number) => `${v}k`}
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                  />
-                  <ChartTooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "6px",
-                      fontSize: 11,
-                    }}
-                    formatter={(value: unknown, name: unknown) =>
-                      name === "profit"
-                        ? [`${value as number}k gils/jour`, "Bénéfice journalier"]
-                        : [`${value as number}`, "Opportunités"]
-                    }
-                  />
-                  <Line
-                    yAxisId="opps"
-                    type="monotone"
-                    dataKey="opps"
-                    stroke="#3b82f6"
-                    strokeWidth={1.5}
-                    dot={false}
-                  />
-                  <Line
-                    yAxisId="profit"
-                    type="monotone"
-                    dataKey="profit"
-                    stroke="#f97316"
-                    strokeWidth={1.5}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-              <p className="mt-1 text-center text-[10px] text-muted-foreground">
-                Bleu = opportunités · Orange = total gils/jour (k)
-              </p>
-            </div>
-          </Section>
-        )}
 
         {/* ── World rankings ── */}
         {data.worldRankings.length > 0 && (
           <Section
             title="Meilleurs serveurs sources (gils/jour cumulés sur tous les scans)"
-            tip="Classement des serveurs sources par profit journalier cumulé sur tous tes scans. Un serveur en tête = il a régulièrement des prix bas sur des objets que tu peux revendre chez toi."
+            tip="Classement des serveurs sources par profit journalier cumulé dans le dernier scan. Un serveur en tête = il a des prix bas sur des objets que tu peux revendre chez toi."
           >
             <div className="rounded-lg border bg-card p-3">
               <ResponsiveContainer
@@ -488,64 +406,6 @@ export function StatsPage() {
             </Section>
           )}
         </div>
-
-        {/* ── Top items ── */}
-        {data.topItems.length > 0 && (
-          <Section
-            title="Objets d'arbitrage les plus récurrents"
-            tip="Objets qui apparaissent le plus souvent comme opportunités d'arbitrage sur tes scans. Un objet récurrent = bonne cible pour le suivi."
-          >
-            <div className="rounded-lg border">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b bg-muted/30 text-muted-foreground">
-                    <th className="px-3 py-2 text-left font-medium">Objet</th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      <span className="inline-flex items-center justify-end gap-1">
-                        Scans
-                        <InfoTip text="Nombre de scans distincts où cet objet est apparu comme opportunité rentable." />
-                      </span>
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      <span className="inline-flex items-center justify-end gap-1">
-                        Bénéfice moy./unité
-                        <InfoTip text="Profit moyen par unité achetée = prix de vente estimé chez toi − coût d'achat − taxes vendeur." />
-                      </span>
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      <span className="inline-flex items-center justify-end gap-1">
-                        Meilleurs gils/jour
-                        <InfoTip text="Meilleur profit journalier estimé observé pour cet objet sur un seul scan (profit/unité × unités vendues par jour)." />
-                      </span>
-                    </th>
-                    <th className="px-3 py-2 text-left font-medium">Confiance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.topItems.map((item) => (
-                    <tr key={item.itemId} className="border-b last:border-0 hover:bg-muted/20">
-                      <td className="px-3 py-1.5 font-medium">
-                        {item.name || (
-                          <span className="text-muted-foreground">Objet n°{item.itemId}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">{item.scanCount}</td>
-                      <td className="px-3 py-1.5 text-right text-emerald-500 tabular-nums">
-                        {gil(Math.round(item.avgUnitProfit))}
-                      </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums">
-                        {gil(item.maxDailyProfit)}
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <ConfBadge label={item.bestConfidence} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Section>
-        )}
       </div>
     </>
   );
