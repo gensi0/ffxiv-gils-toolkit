@@ -9,12 +9,14 @@ import {
   RadarIcon,
   SearchIcon,
   SettingsIcon,
+  ShoppingCartIcon,
   StarIcon,
   StoreIcon,
   UsersIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Page, useNav } from "@/store/nav";
+import { useShoppingList } from "@/store/shoppingList";
 
 interface Item {
   page: Page;
@@ -29,6 +31,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
       { page: "dashboard", label: "Tableau de bord", icon: LayoutDashboardIcon },
       { page: "scan", label: "Scan", icon: RadarIcon },
       { page: "watchlist", label: "Suivi", icon: StarIcon },
+      { page: "courses", label: "Liste de courses", icon: ShoppingCartIcon },
       { page: "search", label: "Recherche", icon: SearchIcon },
       { page: "history", label: "Historique", icon: HistoryIcon },
       { page: "stats", label: "Statistiques", icon: BarChart2Icon },
@@ -49,6 +52,8 @@ const SECTIONS: { title: string; items: Item[] }[] = [
 function NavButton({ page, label, icon: Icon }: Item) {
   const current = useNav((s) => s.page);
   const setPage = useNav((s) => s.setPage);
+  // Objets restant à acheter, affichés en pastille sur « Liste de courses ».
+  const toBuy = useShoppingList((s) => s.items.filter((i) => !i.bought).length);
   return (
     <button
       type="button"
@@ -62,6 +67,11 @@ function NavButton({ page, label, icon: Icon }: Item) {
     >
       <Icon className="size-3.5" />
       {label}
+      {page === "courses" && toBuy > 0 && (
+        <span className="ml-auto rounded-full bg-emerald-500/20 px-1.5 text-[10px] text-emerald-500 tabular-nums">
+          {toBuy}
+        </span>
+      )}
     </button>
   );
 }
