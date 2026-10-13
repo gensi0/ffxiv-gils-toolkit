@@ -894,10 +894,10 @@ mod tests {
         let k = known(500, 10, 1_000);
         let used = HashSet::new();
         let sales = [
-            sale(900, 500, 10, false),   // avant l'annonce (hors tolérance)
-            sale(2_000, 500, 5, false),  // mauvaise quantité
+            sale(100, 500, 10, false), // bien avant l'annonce (hors tolérance de 10 min)
+            sale(2_000, 500, 5, false), // mauvaise quantité
             sale(2_000, 450, 10, false), // mauvais prix
-            sale(2_000, 500, 10, true),  // mauvaise qualité
+            sale(2_000, 500, 10, true), // mauvaise qualité
             sale(3_000, 500, 10, false), // la bonne
         ];
         assert_eq!(
