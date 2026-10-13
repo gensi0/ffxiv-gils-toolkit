@@ -36,7 +36,7 @@ function TripCard({ trip, opportunities }: { trip: Trip; opportunities: Opportun
         <span className="text-sm font-semibold">{trip.world}</span>
         <span className="text-muted-foreground">{trip.dc}</span>
         {crossRegion && (
-          <span className="text-[11px] text-amber-600 dark:text-amber-400">cross-region</span>
+          <span className="text-[11px] text-amber-600 dark:text-amber-400">inter-région</span>
         )}
         <span className="ml-auto text-sm font-semibold tabular-nums">
           {gilShort(trip.profitPerHour)}/h
@@ -44,14 +44,14 @@ function TripCard({ trip, opportunities }: { trip: Trip; opportunities: Opportun
       </header>
       <div className="flex gap-4 px-3 py-1.5 text-[11px] text-muted-foreground">
         <span>
-          <span className="text-foreground tabular-nums">{gil(trip.profitPerTrip)}</span> / trip
+          <span className="text-foreground tabular-nums">{gil(trip.profitPerTrip)}</span> / trajet
         </span>
         <span>
           <span className="text-foreground tabular-nums">{trip.slotsUsed}</span>/{INVENTORY_SLOTS}{" "}
-          slots
+          emplacements
         </span>
-        <span>{trip.travelMinutes} min round trip</span>
-        <span>{items.length} items</span>
+        <span>{trip.travelMinutes} min aller-retour</span>
+        <span>{items.length} objets</span>
       </div>
       <table className="w-full">
         <tbody>
@@ -83,8 +83,8 @@ function TripCard({ trip, opportunities }: { trip: Trip; opportunities: Opportun
       </table>
       {leftOut > 0 && (
         <p className="border-t px-3 py-1.5 text-[11px] text-muted-foreground">
-          {leftOut} more {leftOut === 1 ? "opportunity" : "opportunities"} left out (inventory full
-          or same demand as a better pick).
+          {leftOut} {leftOut === 1 ? "autre opportunité écartée" : "autres opportunités écartées"}{" "}
+          (inventaire plein ou même demande qu'un meilleur choix).
         </p>
       )}
     </section>

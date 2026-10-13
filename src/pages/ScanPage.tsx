@@ -22,6 +22,7 @@ import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useNav } from "@/store/nav";
+import { CONFIDENCE_LABEL, REGION_LABEL, labelOf } from "@/lib/labels";
 import { useScanFilters } from "@/store/scanFilters";
 
 export function ScanPage() {
@@ -41,7 +42,7 @@ export function ScanPage() {
               openScan(null);
             }}
           >
-            Show latest
+            Afficher le dernier
           </Button>
         )}
         <ScanButton />
@@ -51,7 +52,7 @@ export function ScanPage() {
         <div className="flex items-center gap-3 p-4 text-xs text-destructive">
           {errorMessage(results.error)}
           <Button variant="outline" size="sm" onClick={() => void results.refetch()}>
-            Retry
+            Réessayer
           </Button>
         </div>
       ) : results.isPending ? (
@@ -61,7 +62,7 @@ export function ScanPage() {
           ))}
         </div>
       ) : results.data === null ? (
-        <EmptyState message="No completed scan yet." action={<ScanButton />} />
+        <EmptyState message="Aucun scan terminé pour l'instant." action={<ScanButton />} />
       ) : (
         <>
           <RunSummary r={results.data} tab={tab} onTab={setTab} />
@@ -92,19 +93,20 @@ function RunSummary(props: {
       >
         <TabsList className="h-7">
           <TabsTrigger value="opportunities" className="text-xs">
-            Opportunities ({run.opportunitiesFound ?? 0})
+            Opportunités ({run.opportunitiesFound ?? 0})
           </TabsTrigger>
           <TabsTrigger value="candidates" className="text-xs">
-            Prefilter candidates
+            Candidats du préfiltre
           </TabsTrigger>
         </TabsList>
       </Tabs>
       <span>
-        Scanned {ago(run.startedAt)} · {gil(run.itemsScanned)} items · home {props.r.homeWorld}
+        Scanné {ago(run.startedAt)} · {gil(run.itemsScanned)} objets · serveur principal{" "}
+        {props.r.homeWorld}
       </span>
       {(run.itemsFailed ?? 0) > 0 && (
         <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-          {run.itemsFailed} items failed to fetch
+          {run.itemsFailed} objets non récupérés
           <RetryButton scanId={run.scanId} />
         </span>
       )}
@@ -116,7 +118,7 @@ const oc = columnHelper<Opportunity>();
 const opportunityColumns = [
   oc.accessor((o) => o.item.name, {
     id: "item",
-    header: "Item",
+    header: "Objet",
     cell: (c) => (
       <span className="flex items-center gap-2">
         <ItemIcon path={c.row.original.item.iconPath} className="size-5" />
@@ -135,53 +137,53 @@ const opportunityColumns = [
         {c.getValue()}
         <span className="text-muted-foreground"> · {c.row.original.sourceDc}</span>
         {c.row.original.crossRegion && (
-          <span className="ml-1 text-[11px] text-amber-600 dark:text-amber-400">cross-region</span>
+          <span className="ml-1 text-[11px] text-amber-600 dark:text-amber-400">inter-région</span>
         )}
       </span>
     ),
   }),
   oc.accessor("sourceUnitPrice", {
-    header: "Buy at",
+    header: "Prix d'achat",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   oc.accessor("unitsToBuy", {
-    header: "Units",
+    header: "Unités",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   oc.accessor("expectedSellPrice", {
-    header: "Sell at",
+    header: "Prix de vente",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   oc.accessor("unitProfit", {
-    header: "Profit / unit",
+    header: "Bénéfice / unité",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   oc.accessor("profitPerTrip", {
-    header: "Profit / trip",
+    header: "Bénéfice / trajet",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   oc.accessor("dailyProfit", {
-    header: "Gil / day",
+    header: "Gils / jour",
     cell: (c) => <span className="font-medium">{gil(c.getValue())}</span>,
     meta: { numeric: true },
   }),
   oc.accessor("homeUnitsPerDay", {
-    header: "Sold / day",
+    header: "Ventes / jour",
     cell: (c) => decimal(c.getValue()),
     meta: { numeric: true },
   }),
   oc.accessor("confidence", {
-    header: "Confidence",
+    header: "Confiance",
     cell: (c) => <ConfidenceBadge value={c.getValue()} />,
     sortFn: "confidence",
   }),
   oc.accessor("sourceUploadMs", {
-    header: "Data age",
+    header: "Âge des données",
     cell: (c) => (
       <span className={cn(c.row.original.isStale && "text-muted-foreground/60")}>
         <Age ms={c.getValue()} />
@@ -235,7 +237,7 @@ function OpportunityView({ r }: { r: ScanResults }) {
   );
 
   const regions = useMemo(
-    () => [...new Set(r.opportunities.map((o) => dcToRegion.get(o.sourceDc) ?? "Unknown"))].sort(),
+    () => [...new Set(r.opportunities.map((o) => dcToRegion.get(o.sourceDc) ?? "Inconnue"))].sort(),
     [r.opportunities, dcToRegion],
   );
 
@@ -243,7 +245,7 @@ function OpportunityView({ r }: { r: ScanResults }) {
   const dcs = useMemo(() => {
     const all = [...new Set(r.opportunities.map((o) => o.sourceDc))].sort();
     if (selRegions.length === 0) return all;
-    return all.filter((d) => selRegions.includes(dcToRegion.get(d) ?? "Unknown"));
+    return all.filter((d) => selRegions.includes(dcToRegion.get(d) ?? "Inconnue"));
   }, [r.opportunities, selRegions, dcToRegion]);
 
   // Worlds filtered by selected DCs (and regions)
@@ -257,7 +259,7 @@ function OpportunityView({ r }: { r: ScanResults }) {
     if (selRegions.length > 0)
       return all.filter((w) => {
         const opp = r.opportunities.find((o) => o.sourceWorld === w);
-        return opp ? selRegions.includes(dcToRegion.get(opp.sourceDc) ?? "Unknown") : false;
+        return opp ? selRegions.includes(dcToRegion.get(opp.sourceDc) ?? "Inconnue") : false;
       });
     return all;
   }, [r.opportunities, selDcs, selRegions, dcToRegion]);
@@ -266,7 +268,7 @@ function OpportunityView({ r }: { r: ScanResults }) {
   const handleRegionChange = (v: string[]) => {
     setSelRegions(v);
     if (v.length > 0) {
-      setSelDcs(selDcs.filter((d) => v.includes(dcToRegion.get(d) ?? "Unknown")));
+      setSelDcs(selDcs.filter((d) => v.includes(dcToRegion.get(d) ?? "Inconnue")));
       setSelWorlds([]);
     }
   };
@@ -282,7 +284,7 @@ function OpportunityView({ r }: { r: ScanResults }) {
         (o) =>
           (category.length === 0 || category.includes(o.item.category ?? "")) &&
           (selRegions.length === 0 ||
-            selRegions.includes(dcToRegion.get(o.sourceDc) ?? "Unknown")) &&
+            selRegions.includes(dcToRegion.get(o.sourceDc) ?? "Inconnue")) &&
           (selDcs.length === 0 || selDcs.includes(o.sourceDc)) &&
           (selWorlds.length === 0 || selWorlds.includes(o.sourceWorld)) &&
           (selConfidence.length === 0 || selConfidence.includes(o.confidence)) &&
@@ -303,7 +305,7 @@ function OpportunityView({ r }: { r: ScanResults }) {
   );
 
   if (r.opportunities.length === 0) {
-    return <EmptyState message="This scan found no opportunity above your thresholds." />;
+    return <EmptyState message="Ce scan n'a trouvé aucune opportunité au-dessus de tes seuils." />;
   }
   return (
     <>
@@ -316,41 +318,44 @@ function OpportunityView({ r }: { r: ScanResults }) {
               setGrouped(c === true);
             }}
           />
-          <Label htmlFor="group-by-world">Group by source world</Label>
+          <Label htmlFor="group-by-world">Grouper par serveur source</Label>
         </div>
         {grouped ? (
           <span className="text-muted-foreground">
-            One card per world, best trips first. Filters do not apply to trips.
+            Une carte par serveur, meilleurs trajets en premier. Les filtres ne s'appliquent pas aux
+            trajets.
           </span>
         ) : (
           <>
             <MultiSelect
               value={category}
               onChange={setCategory}
-              all="All categories"
+              all="Toutes catégories"
               options={categories}
             />
             <MultiSelect
               value={selRegions}
               onChange={handleRegionChange}
-              all="All regions"
+              all="Toutes régions"
+              display={labelOf(REGION_LABEL)}
               options={regions}
             />
-            <MultiSelect value={selDcs} onChange={handleDcChange} all="All DCs" options={dcs} />
+            <MultiSelect value={selDcs} onChange={handleDcChange} all="Tous les DC" options={dcs} />
             <MultiSelect
               value={selWorlds}
               onChange={setSelWorlds}
-              all="All servers"
+              all="Tous les serveurs"
               options={availableWorlds}
             />
             <MultiSelect
               value={selConfidence}
               onChange={setSelConfidence}
-              all="All confidence"
+              all="Toute confiance"
               options={CONFIDENCE_OPTIONS}
+              display={labelOf(CONFIDENCE_LABEL)}
             />
             <Input
-              placeholder="Min profit / trip"
+              placeholder="Bénéfice min. / trajet"
               inputMode="numeric"
               value={minProfit}
               onChange={(e) => {
@@ -366,10 +371,10 @@ function OpportunityView({ r }: { r: ScanResults }) {
                   setHqOnly(c === true);
                 }}
               />
-              <Label htmlFor="hq-only">HQ only</Label>
+              <Label htmlFor="hq-only">HQ uniquement</Label>
             </div>
             <span className="ml-auto text-muted-foreground">
-              {rows.length} of {r.opportunities.length}
+              {rows.length} sur {r.opportunities.length}
             </span>
           </>
         )}
@@ -397,17 +402,24 @@ function MultiSelect({
   options,
   value,
   onChange,
+  display = (v) => v,
 }: {
   all: string;
   options: string[];
   value: string[];
   onChange: (v: string[]) => void;
+  /** Libellé affiché pour une valeur (les valeurs restent celles du backend). */
+  display?: (v: string) => string;
 }) {
   const toggle = (opt: string) => {
     onChange(value.includes(opt) ? value.filter((v) => v !== opt) : [...value, opt]);
   };
   const label =
-    value.length === 0 ? all : value.length === 1 ? value[0] : `${value.length} selected`;
+    value.length === 0
+      ? all
+      : value.length === 1
+        ? display(value[0] ?? "")
+        : `${String(value.length)} sélectionnés`;
 
   return (
     <Popover.Root>
@@ -438,7 +450,7 @@ function MultiSelect({
                 }}
                 className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
               >
-                Clear selection
+                Effacer la sélection
               </button>
               <Separator className="my-1" />
             </>
@@ -454,7 +466,7 @@ function MultiSelect({
               <span className="flex size-3.5 shrink-0 items-center justify-center rounded-sm border border-muted-foreground/40">
                 {value.includes(opt) && <CheckIcon className="size-3" />}
               </span>
-              <span className="truncate">{opt}</span>
+              <span className="truncate">{display(opt)}</span>
             </button>
           ))}
         </Popover.Content>
@@ -467,7 +479,7 @@ const cc = columnHelper<Candidate>();
 const candidateColumns = [
   cc.accessor((c) => c.item.name, {
     id: "item",
-    header: "Item",
+    header: "Objet",
     cell: (c) => (
       <span className="flex items-center gap-2">
         <ItemIcon path={c.row.original.item.iconPath} className="size-5" />
@@ -480,7 +492,7 @@ const candidateColumns = [
     cell: (c) => <QualityTag quality={c.getValue()} soldAs={c.row.original.soldAs} />,
   }),
   cc.accessor("sourceWorld", {
-    header: "Cheapest in DC",
+    header: "Moins cher du DC",
     cell: (c) => (
       <span>
         {c.getValue()} <span className="text-muted-foreground">· {c.row.original.sourceDc}</span>
@@ -488,22 +500,22 @@ const candidateColumns = [
     ),
   }),
   cc.accessor("sourceMinPrice", {
-    header: "Min price",
+    header: "Prix min.",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   cc.accessor("estSellPrice", {
-    header: "Est. sell",
+    header: "Vente estimée",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   cc.accessor("estProfit", {
-    header: "Est. profit / unit",
+    header: "Bénéfice est. / unité",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   cc.accessor("homeUnitsPerDay", {
-    header: "Sold / day",
+    header: "Ventes / jour",
     cell: (c) => decimal(c.getValue()),
     meta: { numeric: true },
   }),
@@ -513,7 +525,7 @@ const candidateColumns = [
     meta: { numeric: true },
   }),
   cc.accessor("sourceUploadMs", {
-    header: "Data age",
+    header: "Âge des données",
     cell: (c) => <Age ms={c.getValue()} />,
     meta: { numeric: true },
   }),
@@ -541,12 +553,13 @@ function CandidateView({ scanId }: { scanId: string }) {
       </div>
     );
   }
-  if (candidates.data.length === 0) return <EmptyState message="No item passed the prefilter." />;
+  if (candidates.data.length === 0)
+    return <EmptyState message="Aucun objet n'a passé le préfiltre." />;
   return (
     <>
       <p className="border-b px-4 py-1.5 text-[11px] text-muted-foreground">
-        Estimates from aggregated data only (top 300 by score). Opportunities are the drilled-down
-        subset.
+        Estimations à partir des données agrégées uniquement (top 300 par score). Les opportunités
+        sont le sous-ensemble analysé en détail.
       </p>
       <DataTable
         columns={candidateColumns}
@@ -576,7 +589,7 @@ function RetryButton({ scanId }: { scanId: string }) {
         retry.mutate();
       }}
     >
-      Retry
+      Réessayer
     </Button>
   );
 }

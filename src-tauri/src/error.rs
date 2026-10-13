@@ -2,15 +2,15 @@ use serde::{Serialize, Serializer};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error("database error: {0}")]
+    #[error("erreur de base de données : {0}")]
     Db(#[from] sqlx::Error),
-    #[error("migration error: {0}")]
+    #[error("erreur de migration : {0}")]
     Migrate(#[from] sqlx::migrate::MigrateError),
-    #[error("network error: {0}")]
+    #[error("erreur réseau : {0}")]
     Http(#[from] reqwest::Error),
-    #[error("unexpected data: {0}")]
+    #[error("données inattendues : {0}")]
     Data(#[from] serde_json::Error),
-    #[error("invalid input: {0}")]
+    #[error("saisie invalide : {0}")]
     Invalid(String),
     #[error("{0}")]
     Other(String),

@@ -43,7 +43,7 @@ jobs:
           workspaces: src-tauri
       # tauri::generate_context! needs the frontend dist folder to exist.
       - run: mkdir -p dist
-      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
-      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets -- -D warnings
       # Live-API tests are #[ignore]d and do not run here.
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --workspace

@@ -19,7 +19,7 @@ export function WatchButton({ itemId }: { itemId: number }) {
       }}
     >
       <StarIcon className={cn(watched && "fill-amber-400 text-amber-400")} />
-      {watched ? "Watching" : "Add to Watchlist"}
+      {watched ? "Suivi" : "Ajouter au suivi"}
     </Button>
   );
 }

@@ -21,17 +21,17 @@ const CHANGE_STYLE: Record<WatchChange, { row: string; icon: React.ReactNode; la
   new: {
     row: "bg-emerald-500/10",
     icon: <SparklesIcon className="size-3 text-emerald-500" />,
-    label: "New opportunity",
+    label: "Nouvelle opportunité",
   },
   up: {
     row: "bg-emerald-500/10",
     icon: <ArrowUpIcon className="size-3 text-emerald-500" />,
-    label: "Profit up",
+    label: "Bénéfice en hausse",
   },
   down: {
     row: "bg-red-500/10",
     icon: <ArrowDownIcon className="size-3 text-red-500" />,
-    label: "Profit down",
+    label: "Bénéfice en baisse",
   },
 };
 
@@ -46,7 +46,7 @@ function ThresholdInput({ row, placeholder }: { row: WatchItem; placeholder: num
     const clean = text.replace(/[\s,_]/g, "");
     const value = clean === "" ? null : Number(clean);
     if (value !== null && (!Number.isInteger(value) || value < 0)) {
-      toast.error("Threshold must be a whole number of gil");
+      toast.error("Le seuil doit être un nombre entier de gils");
       return;
     }
     if (value === row.notifyAboveProfit) return;
@@ -88,9 +88,9 @@ export function WatchlistPage() {
 
   const columns = useMemo(
     () => [
-      c.accessor((w) => w.item?.name ?? `Item #${w.itemId}`, {
+      c.accessor((w) => w.item?.name ?? `Objet n°${w.itemId}`, {
         id: "item",
-        header: "Item",
+        header: "Objet",
         cell: (v) => {
           const w = v.row.original;
           const style = w.change ? CHANGE_STYLE[w.change] : null;
@@ -102,7 +102,7 @@ export function WatchlistPage() {
               {!w.loaded && <Loader2Icon className="size-3 animate-spin text-muted-foreground" />}
               {w.error && (
                 <span className="text-[11px] text-destructive" title={w.error}>
-                  partial data
+                  données partielles
                 </span>
               )}
             </span>
@@ -111,7 +111,7 @@ export function WatchlistPage() {
       }),
       c.accessor((w) => w.best?.world, {
         id: "source",
-        header: "Best source",
+        header: "Meilleure source",
         cell: (v) => {
           const b = v.row.original.best;
           return b ? (
@@ -120,56 +120,56 @@ export function WatchlistPage() {
               <QualityTag quality={b.quality} soldAs={b.soldAs} />
             </span>
           ) : (
-            <span className="text-muted-foreground">none</span>
+            <span className="text-muted-foreground">aucune</span>
           );
         },
         sortUndefined: "last",
       }),
       c.accessor((w) => w.best?.sourceUnitPrice, {
         id: "buy",
-        header: "Buy at",
+        header: "Achat à",
         cell: (v) => gil(v.getValue()),
         meta: { numeric: true },
         sortUndefined: "last",
       }),
       c.accessor((w) => w.best?.unitsToBuy, {
         id: "units",
-        header: "Units",
+        header: "Unités",
         cell: (v) => gil(v.getValue()),
         meta: { numeric: true },
         sortUndefined: "last",
       }),
       c.accessor((w) => w.best?.expectedSell, {
         id: "sell",
-        header: "Sell at",
+        header: "Vente à",
         cell: (v) => gil(v.getValue()),
         meta: { numeric: true },
         sortUndefined: "last",
       }),
       c.accessor((w) => w.homeMinNq ?? undefined, {
         id: "homeMin",
-        header: "Home min NQ",
+        header: "Min NQ principal",
         cell: (v) => gil(v.getValue()),
         meta: { numeric: true },
         sortUndefined: "last",
       }),
       c.accessor((w) => w.best?.profitPerTrip, {
         id: "trip",
-        header: "Profit / trip",
+        header: "Bénéfice / trajet",
         cell: (v) => gil(v.getValue()),
         meta: { numeric: true },
         sortUndefined: "last",
       }),
       c.accessor((w) => w.best?.dailyProfit, {
         id: "daily",
-        header: "Gil / day",
+        header: "Gils / jour",
         cell: (v) => <span className="font-medium">{gil(v.getValue())}</span>,
         meta: { numeric: true },
         sortUndefined: "last",
       }),
       c.accessor((w) => w.best?.confidence, {
         id: "confidence",
-        header: "Confidence",
+        header: "Confiance",
         cell: (v) => {
           const value = v.getValue();
           return value ? <ConfidenceBadge value={value} /> : null;
@@ -178,14 +178,14 @@ export function WatchlistPage() {
       }),
       c.accessor((w) => w.lastEventMs ?? undefined, {
         id: "event",
-        header: "Last live update",
+        header: "Dernière MàJ en direct",
         cell: (v) => <Age ms={v.getValue()} staleHours={1} />,
         meta: { numeric: true },
         sortUndefined: "last",
       }),
       c.display({
         id: "threshold",
-        header: "Notify above",
+        header: "Notifier au-delà de",
         cell: (v) => <ThresholdInput row={v.row.original} placeholder={defaultThreshold} />,
         meta: { numeric: true },
       }),
@@ -196,7 +196,7 @@ export function WatchlistPage() {
           <Button
             variant="ghost"
             size="icon-xs"
-            title="Remove from watchlist"
+            title="Retirer du suivi"
             onClick={(e) => {
               e.stopPropagation();
               toggle.mutate({ itemId: v.row.original.itemId, watched: true });
@@ -212,12 +212,12 @@ export function WatchlistPage() {
 
   return (
     <>
-      <PageHeader title="Watchlist" />
+      <PageHeader title="Suivi" />
       {list.isError ? (
         <div className="flex items-center gap-3 p-4 text-xs text-destructive">
           {errorMessage(list.error)}
           <Button variant="outline" size="sm" onClick={() => void list.refetch()}>
-            Retry
+            Réessayer
           </Button>
         </div>
       ) : !list.data ? (
@@ -228,7 +228,7 @@ export function WatchlistPage() {
         </div>
       ) : list.data.length === 0 ? (
         <EmptyState
-          message="No starred items. Star one from its detail page to follow it live."
+          message="Aucun objet suivi. Ajoutes-en un depuis sa fiche pour le suivre en direct."
           action={
             <Button
               variant="outline"
@@ -237,7 +237,7 @@ export function WatchlistPage() {
                 setPage("search");
               }}
             >
-              Search items
+              Rechercher des objets
             </Button>
           }
         />

@@ -104,7 +104,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: FFXIV Trader ${{ github.ref_name }}
-          releaseBody: Unsigned build. See the README for how to open it on macOS.
+          releaseName: FFXIV Gils Toolkit ${{ github.ref_name }}
+          releaseBody: "Build non signé : voir le README pour l'ouvrir sur macOS et Windows."
           releaseDraft: true
           args: ${{ matrix.args }} ${{ env.TAURI_SIGN_CONFIG }}

@@ -75,17 +75,17 @@ function SaleTooltip({
   return (
     <div className="rounded-md border bg-popover px-2 py-1.5 text-xs text-popover-foreground shadow-md">
       <div className="text-muted-foreground">
-        {new Date(dot.t).toLocaleString(undefined, {
+        {new Date(dot.t).toLocaleString("fr-FR", {
           dateStyle: "medium",
           timeStyle: isSale ? "short" : undefined,
         })}
       </div>
       {isSale ? (
         <div className="tabular-nums">
-          {dot.hq ? "HQ" : "NQ"} · {gil(dot.quantity)} × {gil(dot.price)} gil
+          {dot.hq ? "HQ" : "NQ"} · {gil(dot.quantity)} × {gil(dot.price)} gils
         </div>
       ) : (
-        <div className="tabular-nums">Daily median {gil(dot.median)} gil</div>
+        <div className="tabular-nums">Médiane du jour {gil(dot.median)} gils</div>
       )}
     </div>
   );
@@ -121,7 +121,7 @@ export function SalesChart({
   if (sales.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        No sale on the home world in the last 28 days.
+        Aucune vente sur le serveur principal ces 28 derniers jours.
       </p>
     );
   }
@@ -131,10 +131,10 @@ export function SalesChart({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-        <LegendKey color={c.nq} label={`NQ · ${data.nq.length} sales`} />
-        {showHq && <LegendKey color={c.hq} label={`HQ · ${data.hq.length} sales`} />}
-        <span>Dots are sales, lines the daily median.</span>
-        {data.hidden > 0 && <span>{data.hidden} outlier sales above the chart.</span>}
+        <LegendKey color={c.nq} label={`NQ · ${data.nq.length} ventes`} />
+        {showHq && <LegendKey color={c.hq} label={`HQ · ${data.hq.length} ventes`} />}
+        <span>Points : ventes · lignes : médiane du jour.</span>
+        {data.hidden > 0 && <span>{data.hidden} ventes aberrantes au-dessus du graphique.</span>}
         <Button
           variant="ghost"
           size="xs"
@@ -143,7 +143,7 @@ export function SalesChart({
             setShowTable((v) => !v);
           }}
         >
-          {showTable ? "Hide table" : "Show table"}
+          {showTable ? "Masquer le tableau" : "Afficher le tableau"}
         </Button>
       </div>
       <div className="h-56 w-full">
@@ -160,7 +160,7 @@ export function SalesChart({
                 (_, i) => domain[0] + (i * (domain[1] - domain[0])) / 4,
               )}
               tickFormatter={(t: number) =>
-                new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short" })
+                new Date(t).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
               }
               tick={{ fill: c.text, fontSize: 11 }}
               stroke={c.grid}
@@ -247,14 +247,14 @@ function SalesTable({ sales }: { sales: SalePoint[] }) {
           <tr className="border-b">
             <th className="h-7 px-2 text-left font-medium">Date</th>
             <th className="px-2 text-left font-medium">Q</th>
-            <th className="px-2 text-right font-medium">Units</th>
-            <th className="px-2 text-right font-medium">Price / unit</th>
+            <th className="px-2 text-right font-medium">Unités</th>
+            <th className="px-2 text-right font-medium">Prix / unité</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((s, i) => (
             <tr key={`${s.t}-${i}`} className="border-b border-border/50">
-              <td className="h-6 px-2">{new Date(s.t).toLocaleString()}</td>
+              <td className="h-6 px-2">{new Date(s.t).toLocaleString("fr-FR")}</td>
               <td className="px-2">{s.hq ? "HQ" : "NQ"}</td>
               <td className="px-2 text-right tabular-nums">{gil(s.quantity)}</td>
               <td className="px-2 text-right tabular-nums">{gil(s.price)}</td>
@@ -264,7 +264,7 @@ function SalesTable({ sales }: { sales: SalePoint[] }) {
       </table>
       {sales.length > rows.length && (
         <p className="px-2 py-1 text-[11px] text-muted-foreground">
-          Latest {rows.length} of {sales.length} sales.
+          {rows.length} ventes les plus récentes sur {sales.length}.
         </p>
       )}
     </div>

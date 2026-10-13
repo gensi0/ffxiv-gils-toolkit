@@ -1,7 +1,7 @@
 {
-  "name": "ffxiv-trader",
+  "name": "ffxiv-gils-toolkit",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,9 +12,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "rs:fmt": "cargo fmt --manifest-path src-tauri/Cargo.toml",
-    "rs:lint": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
-    "rs:test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "rs:fmt": "cargo fmt --manifest-path src-tauri/Cargo.toml --all",
+    "rs:lint": "cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets -- -D warnings",
+    "rs:test": "cargo test --manifest-path src-tauri/Cargo.toml --workspace",
     "prepare": "husky"
   },
   "dependencies": {

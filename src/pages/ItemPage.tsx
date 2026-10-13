@@ -42,10 +42,10 @@ function ItemView({ itemId, onBack }: { itemId: number; onBack: () => void }) {
   });
 
   const header = (
-    <PageHeader title={detail.data?.item.name ?? "Item"}>
+    <PageHeader title={detail.data?.item.name ?? "Objet"}>
       <Button variant="ghost" size="sm" onClick={onBack}>
         <ArrowLeftIcon />
-        Back
+        Retour
       </Button>
       <WatchButton itemId={itemId} />
       <Button
@@ -57,7 +57,7 @@ function ItemView({ itemId, onBack }: { itemId: number; onBack: () => void }) {
         }}
       >
         <RefreshCwIcon className={cn(refresh.isPending && "animate-spin")} />
-        Refresh
+        Actualiser
       </Button>
     </PageHeader>
   );
@@ -69,7 +69,7 @@ function ItemView({ itemId, onBack }: { itemId: number; onBack: () => void }) {
         <div className="flex items-center gap-3 p-4 text-xs text-destructive">
           {errorMessage(detail.error)}
           <Button variant="outline" size="sm" onClick={() => void detail.refetch()}>
-            Retry
+            Réessayer
           </Button>
         </div>
       </>
@@ -105,46 +105,47 @@ function DetailBody({ d }: { d: ItemDetail }) {
           <div className="text-sm font-semibold">{item.name}</div>
           <div className="flex gap-3 text-[11px] text-muted-foreground">
             {item.category && <span>{item.category}</span>}
-            {item.levelItem != null && <span>iLvl {item.levelItem}</span>}
-            <span>Stack {item.stackSize}</span>
-            <span>{item.canBeHq ? "HQ-able" : "NQ only"}</span>
+            {item.levelItem != null && <span>Niv. d'objet {item.levelItem}</span>}
+            <span>Pile de {item.stackSize}</span>
+            <span>{item.canBeHq ? "HQ possible" : "NQ uniquement"}</span>
             <span>
-              Home {d.homeWorld} · seller tax {percent(d.sellerTax)}
+              Serveur principal {d.homeWorld} · taxe de vente {percent(d.sellerTax)}
             </span>
             <span>
-              Fetched <Age ms={d.fetchedAt} />
+              Récupéré <Age ms={d.fetchedAt} />
             </span>
           </div>
         </div>
       </div>
       {d.failedDcs.length > 0 && (
         <p className="text-xs text-destructive">
-          Listings unavailable for: {d.failedDcs.join(", ")}.
+          Annonces indisponibles pour : {d.failedDcs.join(", ")}.
         </p>
       )}
 
       <Section title="Arbitrage">
         {d.arbitrage.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            No source world beats the home market after taxes, within your sell horizon.
+            Aucun serveur source ne bat l'HV de ton serveur principal après taxes, dans ton horizon
+            de vente.
           </p>
         ) : (
           <ArbitrageTable rows={d.arbitrage} />
         )}
       </Section>
 
-      <Section title={`Sales history · ${d.homeWorld} · 28 days`}>
+      <Section title={`Historique des ventes · ${d.homeWorld} · 28 jours`}>
         <SalesChart sales={d.sales} canBeHq={item.canBeHq} now={d.fetchedAt} />
       </Section>
 
-      <Section title={`Home market · ${d.homeWorld}`}>
+      <Section title={`HV du serveur principal · ${d.homeWorld}`}>
         <div className="grid gap-4 md:grid-cols-2">
           <HomeStatsCard label="NQ" s={d.homeNq} />
           {item.canBeHq && <HomeStatsCard label="HQ" s={d.homeHq} />}
         </div>
       </Section>
 
-      <Section title="Prices by world">
+      <Section title="Prix par serveur">
         <WorldTable rows={d.worlds} />
       </Section>
     </div>
@@ -176,16 +177,16 @@ function HomeStatsCard({ label, s }: { label: string; s: QualityHomeStats }) {
     <div className="rounded-md border p-3">
       <div className="mb-1 text-xs font-medium">{label}</div>
       <Stat
-        label="Units sold / day (7d · 28d)"
+        label="Unités vendues / jour (7 j · 28 j)"
         value={`${decimal(s.d7.unitsPerDay)} · ${decimal(s.d28.unitsPerDay)}`}
       />
-      <Stat label="Sales / day (7d)" value={decimal(s.d7.salesPerDay)} />
-      <Stat label="Average (7d · 28d)" value={`${gil(s.d7.average)} · ${gil(s.d28.average)}`} />
-      <Stat label="Median (7d · 28d)" value={`${gil(s.d7.median)} · ${gil(s.d28.median)}`} />
-      <Stat label="Cheapest credible listing" value={gil(s.f5?.floorListing)} />
-      <Stat label="Expected sell price" value={gil(s.f5?.expectedSell)} />
+      <Stat label="Ventes / jour (7 j)" value={decimal(s.d7.salesPerDay)} />
+      <Stat label="Moyenne (7 j · 28 j)" value={`${gil(s.d7.average)} · ${gil(s.d28.average)}`} />
+      <Stat label="Médiane (7 j · 28 j)" value={`${gil(s.d7.median)} · ${gil(s.d28.median)}`} />
+      <Stat label="Annonce crédible la moins chère" value={gil(s.f5?.floorListing)} />
+      <Stat label="Prix de vente attendu" value={gil(s.f5?.expectedSell)} />
       <Stat
-        label="Days of supply listed"
+        label="Jours de stock en vente"
         value={s.f5?.daysOfSupply != null ? decimal(s.f5.daysOfSupply) : "—"}
       />
     </div>
@@ -207,37 +208,37 @@ const arbColumns = [
     cell: (c) => <QualityTag quality={c.getValue()} soldAs={c.row.original.soldAs} />,
   }),
   arb.accessor("sourceUnitPrice", {
-    header: "Buy at",
+    header: "Achat à",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
-  arb.accessor("unitsToBuy", { header: "Units", meta: { numeric: true } }),
+  arb.accessor("unitsToBuy", { header: "Unités", meta: { numeric: true } }),
   arb.accessor("expectedSell", {
-    header: "Sell at",
+    header: "Vente à",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   arb.accessor("unitProfit", {
-    header: "Profit / unit",
+    header: "Bénéfice / unité",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   arb.accessor("profitPerTrip", {
-    header: "Profit / trip",
+    header: "Bénéfice / trajet",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   arb.accessor("dailyProfit", {
-    header: "Gil / day",
+    header: "Gils / jour",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
   arb.accessor("confidence", {
-    header: "Confidence",
+    header: "Confiance",
     cell: (c) => <ConfidenceBadge value={c.getValue()} />,
   }),
   arb.accessor("sourceUploadMs", {
-    header: "Data age",
+    header: "Âge des données",
     cell: (c) => <Age ms={c.getValue()} />,
     meta: { numeric: true },
   }),
@@ -262,12 +263,12 @@ function WorldTable({ rows }: { rows: WorldRow[] }) {
   const columns = useMemo(
     () => [
       wc.accessor("world", {
-        header: "World",
+        header: "Serveur",
         cell: (c) => (
           <span className={cn(c.row.original.isHome && "font-semibold")}>
             {c.getValue()}
             {c.row.original.isHome && (
-              <span className="ml-1 text-[11px] text-muted-foreground">home</span>
+              <span className="ml-1 text-[11px] text-muted-foreground">principal</span>
             )}
           </span>
         ),
@@ -275,35 +276,35 @@ function WorldTable({ rows }: { rows: WorldRow[] }) {
       wc.accessor("dc", { header: "DC" }),
       wc.accessor((r) => r.nq.minPrice ?? undefined, {
         id: "nqMin",
-        header: "NQ min",
+        header: "Min NQ",
         cell: (c) => gil(c.getValue()),
         meta: { numeric: true },
         sortUndefined: "last",
       }),
       wc.accessor((r) => r.nq.unitsAtMin, {
         id: "nqUnits",
-        header: "Units @ NQ min",
+        header: "Unités au min NQ",
         meta: { numeric: true },
       }),
       wc.accessor((r) => r.hq.minPrice ?? undefined, {
         id: "hqMin",
-        header: "HQ min",
+        header: "Min HQ",
         cell: (c) => gil(c.getValue()),
         meta: { numeric: true },
         sortUndefined: "last",
       }),
       wc.accessor((r) => r.hq.unitsAtMin, {
         id: "hqUnits",
-        header: "Units @ HQ min",
+        header: "Unités au min HQ",
         meta: { numeric: true },
       }),
       wc.accessor((r) => r.nq.listings + r.hq.listings, {
         id: "listings",
-        header: "Listings",
+        header: "Annonces",
         meta: { numeric: true },
       }),
       wc.accessor("uploadMs", {
-        header: "Data age",
+        header: "Âge des données",
         cell: (c) => <Age ms={c.getValue()} />,
         meta: { numeric: true },
       }),
