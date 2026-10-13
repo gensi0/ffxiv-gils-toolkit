@@ -1,7 +1,11 @@
-import { useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { ShoppingCartIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { api, errorMessage } from "@/lib/api";
+import { useVentesAction } from "@/lib/queries";
 import { EmptyState, PageHeader } from "@/components/Page";
 import { LotChips, LotsTooltip } from "@/components/Lots";
 import { ItemIcon, QualityTag } from "@/components/market";
@@ -71,9 +75,95 @@ function Total({ label, value, accent }: { label: string; value: string; accent?
   );
 }
 
+/** Saisie du prix réellement payé, enregistré dans le journal des gains. */
+function PurchaseForm({ i, onDone }: { i: ShoppingItem; onDone: () => void }) {
+  const setBought = useShoppingList((s) => s.setBought);
+  const [qty, setQty] = useState(String(i.units));
+  const [total, setTotal] = useState(String(Math.round(i.cost)));
+  const q = Number.parseInt(qty.replace(/\s/g, ""), 10);
+  const t = Number.parseInt(total.replace(/\s/g, ""), 10);
+  const valid = q > 0 && t >= 0;
+  const add = useVentesAction(() =>
+    api.journalAddPurchase({
+      itemId: i.itemId,
+      hq: i.quality === "HQ",
+      quantity: q,
+      unitCost: t / q,
+      sourceWorld: i.world,
+    }),
+  );
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2 bg-muted/40 px-3 py-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!valid) return;
+        add.mutate(undefined, {
+          onSuccess: (id) => {
+            setBought(i.key, true, id as number);
+            onDone();
+            toast.success("Achat noté dans le journal des gains.");
+          },
+          onError: (err) => toast.error(errorMessage(err)),
+        });
+      }}
+    >
+      <span className="text-muted-foreground">Ce que tu as vraiment acheté :</span>
+      <Input
+        aria-label="Quantité achetée"
+        inputMode="numeric"
+        className="h-7 w-16 text-xs"
+        value={qty}
+        onChange={(e) => {
+          setQty(e.target.value);
+        }}
+      />
+      <span className="text-muted-foreground">unités pour</span>
+      <Input
+        aria-label="Total payé"
+        inputMode="numeric"
+        className="h-7 w-28 text-xs"
+        value={total}
+        onChange={(e) => {
+          setTotal(e.target.value);
+        }}
+      />
+      <span className="text-muted-foreground">gils (taxe comprise)</span>
+      <Button type="submit" size="xs" disabled={!valid || add.isPending}>
+        Noter l'achat
+      </Button>
+      <Button
+        type="button"
+        size="xs"
+        variant="ghost"
+        onClick={() => {
+          setBought(i.key, true);
+          onDone();
+        }}
+      >
+        Cocher sans noter
+      </Button>
+    </form>
+  );
+}
+
 function WorldCard({ g }: { g: WorldGroup }) {
   const { remove, setBought } = useShoppingList();
   const openItem = useNav((s) => s.openItem);
+  const [recording, setRecording] = useState<string | null>(null);
+  const delPurchase = useVentesAction((id: number) => api.journalDeletePurchase(id));
+  const onCheck = (i: ShoppingItem, checked: boolean) => {
+    if (checked) {
+      setRecording(i.key);
+      return;
+    }
+    if (i.purchaseId !== undefined) {
+      if (!window.confirm("Décocher supprime aussi l'achat noté dans le journal. Continuer ?"))
+        return;
+      delPurchase.mutate(i.purchaseId);
+    }
+    setBought(i.key, false);
+  };
   const done = g.items.every((i) => i.bought);
   return (
     <section className={cn("flex flex-col rounded-md border text-xs", done && "opacity-60")}>
@@ -91,68 +181,82 @@ function WorldCard({ g }: { g: WorldGroup }) {
       <table className="w-full">
         <tbody>
           {g.items.map((i) => (
-            <tr key={i.key} className="border-t border-border/50 first:border-t-0">
-              <td className="w-8 pl-3">
-                <Checkbox
-                  checked={i.bought}
-                  aria-label="Acheté"
-                  onCheckedChange={(c) => {
-                    setBought(i.key, c === true);
-                  }}
-                />
-              </td>
-              <td className="h-8 px-2">
-                <button
-                  type="button"
-                  className={cn(
-                    "flex items-center gap-2 text-left hover:underline",
-                    i.bought && "text-muted-foreground line-through",
+            <Fragment key={i.key}>
+              <tr className="border-t border-border/50 first:border-t-0">
+                <td className="w-8 pl-3">
+                  <Checkbox
+                    checked={i.bought || recording === i.key}
+                    aria-label="Acheté"
+                    onCheckedChange={(c) => {
+                      onCheck(i, c === true);
+                    }}
+                  />
+                </td>
+                <td className="h-8 px-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex items-center gap-2 text-left hover:underline",
+                      i.bought && "text-muted-foreground line-through",
+                    )}
+                    onClick={() => {
+                      openItem(i.itemId);
+                    }}
+                  >
+                    <ItemIcon path={i.iconPath} className="size-4" />
+                    <span className="max-w-52 truncate">{i.name}</span>
+                    <QualityTag quality={i.quality} soldAs={i.soldAs} />
+                  </button>
+                  {i.lots && i.lots.length > 1 && !i.bought && (
+                    <span className="mt-0.5 block pl-6">
+                      <LotChips lots={i.lots} />
+                    </span>
                   )}
-                  onClick={() => {
-                    openItem(i.itemId);
-                  }}
-                >
-                  <ItemIcon path={i.iconPath} className="size-4" />
-                  <span className="max-w-52 truncate">{i.name}</span>
-                  <QualityTag quality={i.quality} soldAs={i.soldAs} />
-                </button>
-                {i.lots && i.lots.length > 1 && !i.bought && (
-                  <span className="mt-0.5 block pl-6">
-                    <LotChips lots={i.lots} />
-                  </span>
-                )}
-              </td>
-              <td className="px-2 text-right whitespace-nowrap tabular-nums">
-                <LotsTooltip lots={i.lots ?? []} max={i.maxUnitPrice ?? null}>
-                  <span className="font-medium">{gil(i.units)}</span>
-                  <span className="text-muted-foreground">
-                    {" "}
-                    × moy. {gil(averagePrice(i.lots ?? [], i.units, i.cost))}
-                  </span>
-                </LotsTooltip>
-                {i.maxUnitPrice != null && (
-                  <span className="block text-[10px] text-muted-foreground">
-                    max {gil(i.maxUnitPrice)} / u
-                  </span>
-                )}
-              </td>
-              <td className="px-2 text-right text-muted-foreground tabular-nums">
-                revente {gil(i.sellPrice)}
-              </td>
-              <td className="px-2 text-right text-emerald-500 tabular-nums">+{gil(i.profit)}</td>
-              <td className="w-8 pr-2">
-                <button
-                  type="button"
-                  aria-label="Retirer"
-                  className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                  onClick={() => {
-                    remove(i.key);
-                  }}
-                >
-                  <XIcon className="size-3.5" />
-                </button>
-              </td>
-            </tr>
+                </td>
+                <td className="px-2 text-right whitespace-nowrap tabular-nums">
+                  <LotsTooltip lots={i.lots ?? []} max={i.maxUnitPrice ?? null}>
+                    <span className="font-medium">{gil(i.units)}</span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      × moy. {gil(averagePrice(i.lots ?? [], i.units, i.cost))}
+                    </span>
+                  </LotsTooltip>
+                  {i.maxUnitPrice != null && (
+                    <span className="block text-[10px] text-muted-foreground">
+                      max {gil(i.maxUnitPrice)} / u
+                    </span>
+                  )}
+                </td>
+                <td className="px-2 text-right text-muted-foreground tabular-nums">
+                  revente {gil(i.sellPrice)}
+                </td>
+                <td className="px-2 text-right text-emerald-500 tabular-nums">+{gil(i.profit)}</td>
+                <td className="w-8 pr-2">
+                  <button
+                    type="button"
+                    aria-label="Retirer"
+                    className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                    onClick={() => {
+                      remove(i.key);
+                    }}
+                  >
+                    <XIcon className="size-3.5" />
+                  </button>
+                </td>
+              </tr>
+              {recording === i.key && (
+                <tr>
+                  <td colSpan={6}>
+                    <PurchaseForm
+                      i={i}
+                      onDone={() => {
+                        setRecording(null);
+                      }}
+                    />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>

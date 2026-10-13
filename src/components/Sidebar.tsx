@@ -9,6 +9,8 @@ import {
   SearchIcon,
   SettingsIcon,
   ShoppingCartIcon,
+  TagIcon,
+  NotebookPenIcon,
   StarIcon,
   StoreIcon,
   UsersIcon,
@@ -16,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { type Page, useNav } from "@/store/nav";
 import { useShoppingList } from "@/store/shoppingList";
+import { useVentes } from "@/lib/queries";
 
 interface Item {
   page: Page;
@@ -31,6 +34,8 @@ const SECTIONS: { title: string; items: Item[] }[] = [
       { page: "scan", label: "Scan", icon: RadarIcon },
       { page: "watchlist", label: "Suivi", icon: StarIcon },
       { page: "courses", label: "Liste de courses", icon: ShoppingCartIcon },
+      { page: "ventes", label: "Mes ventes", icon: TagIcon },
+      { page: "journal", label: "Journal des gains", icon: NotebookPenIcon },
       { page: "search", label: "Recherche", icon: SearchIcon },
       { page: "stats", label: "Statistiques", icon: BarChart2Icon },
     ],
@@ -52,6 +57,11 @@ function NavButton({ page, label, icon: Icon }: Item) {
   const setPage = useNav((s) => s.setPage);
   // Objets restant à acheter, affichés en pastille sur « Liste de courses ».
   const toBuy = useShoppingList((s) => s.items.filter((i) => !i.bought).length);
+  // Annonces devancées ou à confirmer, en pastille sur « Mes ventes ».
+  const ventes = useVentes();
+  const alerts =
+    (ventes.data?.pending.length ?? 0) +
+    (ventes.data?.listings.filter((l) => l.undercutPrice !== null).length ?? 0);
   return (
     <button
       type="button"
@@ -65,6 +75,11 @@ function NavButton({ page, label, icon: Icon }: Item) {
     >
       <Icon className="size-3.5" />
       {label}
+      {page === "ventes" && alerts > 0 && (
+        <span className="ml-auto rounded-full bg-red-500/20 px-1.5 text-[10px] text-red-500 tabular-nums">
+          {alerts}
+        </span>
+      )}
       {page === "courses" && toBuy > 0 && (
         <span className="ml-auto rounded-full bg-emerald-500/20 px-1.5 text-[10px] text-emerald-500 tabular-nums">
           {toBuy}

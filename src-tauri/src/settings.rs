@@ -78,6 +78,8 @@ pub struct Settings {
     /// Default notification threshold (profit per trip, gil) for watched items.
     pub watch_notify_profit: i64,
     pub theme: Theme,
+    /// Noms de mes servants, pour reconnaître mes annonces (casse ignorée).
+    pub retainer_names: Vec<String>,
 }
 
 impl Default for Settings {
@@ -99,6 +101,7 @@ impl Default for Settings {
             notifications_enabled: true,
             watch_notify_profit: 100_000,
             theme: Theme::Dark,
+            retainer_names: Vec::new(),
         }
     }
 }

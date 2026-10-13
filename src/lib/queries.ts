@@ -77,6 +77,23 @@ export const useScanCandidates = (scanId: string | null) =>
     ...SHORT,
   });
 
+export const useVentes = () =>
+  useQuery({ queryKey: ["ventes", "overview"], queryFn: api.ventesOverview, ...SHORT });
+
+export const useJournal = (sinceMs: number) =>
+  useQuery({ queryKey: ["ventes", "journal", sinceMs], queryFn: () => api.journalList(sinceMs) });
+
+/** Toute action sur les ventes ou le journal rafraîchit les deux vues. */
+export function useVentesAction<A>(fn: (a: A) => Promise<unknown>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ventes"] });
+    },
+  });
+}
+
 export const useScans = () =>
   useQuery({ queryKey: ["scan", "runs"], queryFn: api.listScans, ...SHORT });
 
@@ -108,6 +125,10 @@ export function useBackendEvents() {
         qc.setQueryData<WatchItem[]>(["watchlist"], (rows) =>
           rows?.map((r) => (r.itemId === e.payload.itemId ? e.payload : r)),
         );
+      }),
+      // Nouveau relevé de mes ventes : annonces, ventes détectées, stock.
+      listen(EVENTS.ventesUpdate, () => {
+        void qc.invalidateQueries({ queryKey: ["ventes"] });
       }),
       listen<ScanProgress>(EVENTS.scanProgress, (e) => {
         setScan(e.payload);

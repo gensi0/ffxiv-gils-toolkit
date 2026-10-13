@@ -13,6 +13,7 @@ mod settings;
 mod spender;
 mod stats;
 mod universalis;
+mod ventes;
 mod watch;
 mod worlds;
 mod xivapi;
@@ -189,6 +190,7 @@ pub fn run() {
             app.manage(spender::SpenderState::new(data_dir_for_spender));
             spawn_background(app.handle(), http);
             tauri::async_runtime::spawn(watch::run(app.handle().clone(), watch_rx));
+            tauri::async_runtime::spawn(ventes::run(app.handle().clone()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -214,6 +216,16 @@ pub fn run() {
             commands::watchlist_set_threshold,
             commands::ws_status,
             commands::market_stats,
+            commands::ventes_overview,
+            commands::ventes_refresh,
+            commands::ventes_set_price,
+            commands::ventes_close,
+            commands::ventes_track,
+            commands::journal_list,
+            commands::journal_add_purchase,
+            commands::journal_delete_purchase,
+            commands::journal_add_sale,
+            commands::journal_delete_sale,
             spender::spender_dataset_status,
             spender::spender_build_dataset,
             spender::spender_currencies,

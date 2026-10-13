@@ -6,6 +6,8 @@ export type Page =
   | "watchlist"
   | "search"
   | "courses"
+  | "ventes"
+  | "journal"
   | "stats"
   | "settings"
   | "item"

@@ -128,6 +128,9 @@ pub struct Listing {
     /// Stable id, used to apply WebSocket `listings/remove` events.
     #[serde(rename = "listingID")]
     pub listing_id: Option<String>,
+    /// Nom du servant vendeur, pour reconnaître mes annonces.
+    #[serde(default)]
+    pub retainer_name: Option<String>,
 }
 
 // ---------- /history/{scope}/{ids} ----------
