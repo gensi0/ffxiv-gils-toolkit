@@ -19,6 +19,14 @@ const SHORT = { staleTime: 30_000 } as const;
 export const useWorlds = () =>
   useQuery({ queryKey: ["worlds"], queryFn: api.listWorlds, ...SHORT });
 
+export const useTaxRates = (worldId: number | null) =>
+  useQuery({
+    queryKey: ["taxRates", worldId],
+    queryFn: () => api.taxRates(worldId ?? 0),
+    enabled: worldId !== null,
+    staleTime: 60 * 60_000,
+  });
+
 export const useSettings = () =>
   useQuery({ queryKey: ["settings"], queryFn: api.getSettings, ...SHORT });
 

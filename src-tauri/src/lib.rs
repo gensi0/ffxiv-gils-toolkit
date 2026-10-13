@@ -194,6 +194,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_worlds,
             commands::get_settings,
+            commands::tax_rates,
             commands::save_settings,
             commands::app_info,
             commands::open_log_dir,

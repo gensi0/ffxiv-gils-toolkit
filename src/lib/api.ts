@@ -338,6 +338,8 @@ export const EVENTS = {
 
 export const api = {
   listWorlds: () => invoke<World[]>("list_worlds"),
+  /** Taxe de vente de la semaine (en %) par cité, pour un serveur. */
+  taxRates: (worldId: number) => invoke<Record<string, number>>("tax_rates", { worldId }),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<Settings>("save_settings", { settings }),
   appInfo: () => invoke<AppInfo>("app_info"),

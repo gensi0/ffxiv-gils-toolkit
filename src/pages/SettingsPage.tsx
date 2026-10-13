@@ -28,7 +28,8 @@ import {
   type Theme,
   type World,
 } from "@/lib/api";
-import { useAppInfo, useSaveSettings, useSettings, useWorlds } from "@/lib/queries";
+import { cn } from "@/lib/utils";
+import { useAppInfo, useSaveSettings, useSettings, useTaxRates, useWorlds } from "@/lib/queries";
 
 export function SettingsPage({ firstLaunch = false }: { firstLaunch?: boolean }) {
   const settings = useSettings();
@@ -227,7 +228,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
               <Field
                 label="Ville des servants"
                 htmlFor="retainer-city"
-                hint="Ville où vendent tes servants. Détermine la taxe de vente (0–5 %)."
+                hint="Ville où vendent tes servants. Sa taxe de la semaine est appliquée à tous les calculs."
               >
                 <Select
                   value={retainerCity}
@@ -247,6 +248,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                   </SelectContent>
                 </Select>
               </Field>
+              <TaxRates worldId={homeWorldId} current={retainerCity} />
             </div>
             <Field label="Langue des noms d'objets" htmlFor="language">
               <ToggleGroup
@@ -471,6 +473,50 @@ const LANGUAGE_LABELS: Record<Language, string> = {
   de: "Deutsch",
   ja: "日本語",
 };
+
+/** Taxes de vente de la semaine sur le serveur principal, la moins chère en vert. */
+function TaxRates({ worldId, current }: { worldId: number | null; current: RetainerCity }) {
+  const rates = useTaxRates(worldId);
+  if (worldId === null) return null;
+  if (rates.isPending) return <Skeleton className="h-10 w-full" />;
+  if (rates.isError) {
+    return (
+      <p className="text-[11px] text-muted-foreground">
+        Taxes de la semaine indisponibles (Universalis injoignable) : 5 % est utilisé par défaut.
+      </p>
+    );
+  }
+  const values = RETAINER_CITIES.map((c) => rates.data[c]).filter(
+    (v): v is number => v !== undefined,
+  );
+  const best = values.length > 0 ? Math.min(...values) : null;
+  return (
+    <div className="col-span-full flex flex-col gap-1.5">
+      <span className="text-xs font-medium">Taxes de vente cette semaine</span>
+      <div className="flex flex-wrap gap-1.5">
+        {RETAINER_CITIES.map((c) => {
+          const v = rates.data[c];
+          return (
+            <span
+              key={c}
+              className={cn(
+                "rounded-md border px-2 py-1 text-[11px] tabular-nums",
+                v === best && "border-emerald-500/50 text-emerald-600 dark:text-emerald-400",
+                c === current && "bg-muted font-semibold",
+              )}
+            >
+              {CITY_LABELS[c]} {v === undefined ? "?" : `${String(v)} %`}
+            </span>
+          );
+        })}
+      </div>
+      <span className="text-[11px] text-muted-foreground">
+        Les taux changent chaque semaine selon le volume des ventes. En gras : ta ville actuelle ;
+        en vert : la moins taxée.
+      </span>
+    </div>
+  );
+}
 
 const CITY_LABELS: Record<RetainerCity, string> = {
   "Limsa Lominsa": "Limsa Lominsa",
