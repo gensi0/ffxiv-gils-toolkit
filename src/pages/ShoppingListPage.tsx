@@ -3,8 +3,10 @@ import { ShoppingCartIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState, PageHeader } from "@/components/Page";
+import { LotChips, LotsTooltip } from "@/components/Lots";
 import { ItemIcon, QualityTag } from "@/components/market";
-import { ago, gil } from "@/lib/format";
+import { ago, gil, percent } from "@/lib/format";
+import { averagePrice, margin } from "@/lib/purchase";
 import { cn } from "@/lib/utils";
 import { useNav } from "@/store/nav";
 import { type ShoppingItem, useShoppingList } from "@/store/shoppingList";
@@ -82,6 +84,9 @@ function WorldCard({ g }: { g: WorldGroup }) {
         )}
         <span className="ml-auto text-muted-foreground tabular-nums">{gil(g.cost)} à dépenser</span>
         <span className="font-semibold text-emerald-500 tabular-nums">+{gil(g.profit)}</span>
+        <span className="text-[11px] text-muted-foreground tabular-nums">
+          marge {percent(margin(g.profit, g.cost))}
+        </span>
       </header>
       <table className="w-full">
         <tbody>
@@ -111,10 +116,25 @@ function WorldCard({ g }: { g: WorldGroup }) {
                   <span className="max-w-52 truncate">{i.name}</span>
                   <QualityTag quality={i.quality} soldAs={i.soldAs} />
                 </button>
+                {i.lots && i.lots.length > 1 && !i.bought && (
+                  <span className="mt-0.5 block pl-6">
+                    <LotChips lots={i.lots} />
+                  </span>
+                )}
               </td>
               <td className="px-2 text-right whitespace-nowrap tabular-nums">
-                <span className="font-medium">{gil(i.units)}</span>
-                <span className="text-muted-foreground"> × {gil(i.unitPrice)}</span>
+                <LotsTooltip lots={i.lots ?? []} max={i.maxUnitPrice ?? null}>
+                  <span className="font-medium">{gil(i.units)}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    × moy. {gil(averagePrice(i.lots ?? [], i.units, i.cost))}
+                  </span>
+                </LotsTooltip>
+                {i.maxUnitPrice != null && (
+                  <span className="block text-[10px] text-muted-foreground">
+                    max {gil(i.maxUnitPrice)} / u
+                  </span>
+                )}
               </td>
               <td className="px-2 text-right text-muted-foreground tabular-nums">
                 revente {gil(i.sellPrice)}
@@ -180,7 +200,12 @@ export function ShoppingListPage() {
             <Total label="Serveurs à visiter" value={String(worlds)} />
             <Total label="Budget" value={`${gil(sum(left, (i) => i.cost))} gils`} />
             <Total
-              label="Bénéfice attendu"
+              label={`Bénéfice attendu · marge ${percent(
+                margin(
+                  sum(left, (i) => i.profit),
+                  sum(left, (i) => i.cost),
+                ),
+              )}`}
               value={`+${gil(sum(left, (i) => i.profit))} gils`}
               accent
             />

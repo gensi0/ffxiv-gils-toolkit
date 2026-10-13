@@ -3,6 +3,8 @@ import type { Opportunity, ScanResults, Trip } from "@/lib/api";
 import { gil, gilShort } from "@/lib/format";
 import { ShoppingCartIcon } from "lucide-react";
 import { CartButton } from "@/components/CartButton";
+import { LotsTooltip } from "@/components/Lots";
+import { oppAverage } from "@/lib/purchase";
 import { useNav } from "@/store/nav";
 import { shoppingKey, useShoppingList } from "@/store/shoppingList";
 
@@ -90,7 +92,9 @@ function TripCard({ trip, opportunities }: { trip: Trip; opportunities: Opportun
                 </span>
               </td>
               <td className="px-2 text-right text-muted-foreground tabular-nums">
-                {gil(o.unitsToBuy)} × {gil(o.sourceUnitPrice)}
+                <LotsTooltip lots={o.lots} max={o.maxUnitPrice}>
+                  {gil(o.unitsToBuy)} × moy. {gil(oppAverage(o))}
+                </LotsTooltip>
               </td>
               <td className="px-2 text-right tabular-nums">{gil(o.profitPerTrip)}</td>
               <td className="px-1 text-right">

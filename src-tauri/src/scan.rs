@@ -618,8 +618,8 @@ async fn run(
                    (scan_id, item_id, quality, source_world_id, source_unit_price, units_to_buy,
                     source_cost, expected_sell_price, home_median_price, home_units_per_day,
                     days_of_supply, unit_profit, profit_per_trip, daily_profit, confidence,
-                    source_upload_unix, computed_at, sold_as, is_stale)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    source_upload_unix, computed_at, sold_as, is_stale, max_unit_price, lots)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             )
             .bind(scan_id)
             .bind(item_id)
@@ -640,6 +640,8 @@ async fn run(
             .bind(now)
             .bind(e.sold_as.as_str())
             .bind(s.is_stale)
+            .bind(e.max_unit_price as i64)
+            .bind(serde_json::to_string(&e.lots).ok())
             .execute(&mut *tx)
             .await?;
             found += 1;

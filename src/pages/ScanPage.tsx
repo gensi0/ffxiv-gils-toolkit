@@ -14,9 +14,11 @@ import { EmptyState, PageHeader } from "@/components/Page";
 import { Age, ConfidenceBadge, ItemIcon, QualityTag } from "@/components/market";
 import { ScanButton, ScanProgressBar } from "@/components/ScanControls";
 import { CartButton } from "@/components/CartButton";
+import { LotsTooltip } from "@/components/Lots";
+import { margin, oppAverage } from "@/lib/purchase";
 import { TripCards } from "@/components/TripCards";
 import { api, errorMessage, type Candidate, type Opportunity, type ScanResults } from "@/lib/api";
-import { ago, decimal, gil } from "@/lib/format";
+import { ago, decimal, gil, percent } from "@/lib/format";
 import { isRunning, useScanCandidates, useScanResults, useWorlds } from "@/lib/queries";
 import { useLive } from "@/store/live";
 import { useMutation } from "@tanstack/react-query";
@@ -148,8 +150,19 @@ const opportunityColumns = [
       </span>
     ),
   }),
-  oc.accessor("sourceUnitPrice", {
-    header: "Prix d'achat",
+  oc.accessor((o) => oppAverage(o), {
+    id: "averagePrice",
+    header: "Prix moyen",
+    cell: (c) => (
+      <LotsTooltip lots={c.row.original.lots} max={c.row.original.maxUnitPrice}>
+        {gil(c.getValue())}
+      </LotsTooltip>
+    ),
+    meta: { numeric: true },
+  }),
+  oc.accessor((o) => o.maxUnitPrice ?? o.sourceUnitPrice, {
+    id: "maxUnitPrice",
+    header: "Prix max",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),
@@ -171,6 +184,12 @@ const opportunityColumns = [
   oc.accessor("profitPerTrip", {
     header: "Bénéfice / trajet",
     cell: (c) => gil(c.getValue()),
+    meta: { numeric: true },
+  }),
+  oc.accessor((o) => margin(o.profitPerTrip, o.sourceCost), {
+    id: "margin",
+    header: "Marge",
+    cell: (c) => percent(c.getValue()),
     meta: { numeric: true },
   }),
   oc.accessor("dailyProfit", {

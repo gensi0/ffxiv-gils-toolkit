@@ -126,6 +126,8 @@ export interface ArbitrageRow {
   soldAs: Quality;
   unitsToBuy: number;
   sourceUnitPrice: number;
+  maxUnitPrice: number;
+  lots: Lot[];
   sourceCost: number;
   expectedSell: number;
   homeMedian: number;
@@ -183,6 +185,12 @@ export interface ScanRun {
   error: string | null;
 }
 
+/** Annonce à acheter : prix unitaire affiché (hors taxe) et quantité. */
+export interface Lot {
+  price: number;
+  quantity: number;
+}
+
 export interface Opportunity {
   item: ItemInfo;
   quality: Quality;
@@ -204,6 +212,10 @@ export interface Opportunity {
   confidence: Confidence;
   sourceUploadMs: number | null;
   isStale: boolean;
+  /** Prix unitaire de l'annonce la plus chère à acheter (absent sur les anciens scans). */
+  maxUnitPrice: number | null;
+  /** Annonces à acheter, de la moins chère à la plus chère (vide sur les anciens scans). */
+  lots: Lot[];
 }
 
 export interface Trip {
