@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Opportunity, Quality } from "@/lib/api";
+import type { Lot, Opportunity, Quality } from "@/lib/api";
 
 /** Ligne de la liste de courses : instantané de l'opportunité au moment de l'ajout. */
 export interface ShoppingItem {
@@ -14,7 +14,11 @@ export interface ShoppingItem {
   world: string;
   dc: string;
   crossRegion: boolean;
+  /** Prix de l'annonce la moins chère (anciennes entrées) — voir `lots`. */
   unitPrice: number;
+  /** Absents pour les entrées ajoutées avant le détail des annonces. */
+  maxUnitPrice?: number | null;
+  lots?: Lot[];
   units: number;
   cost: number;
   sellPrice: number;
@@ -39,6 +43,8 @@ function fromOpportunity(o: Opportunity): ShoppingItem {
     dc: o.sourceDc,
     crossRegion: o.crossRegion,
     unitPrice: o.sourceUnitPrice,
+    maxUnitPrice: o.maxUnitPrice,
+    lots: o.lots,
     units: o.unitsToBuy,
     cost: o.sourceCost,
     sellPrice: o.expectedSellPrice,

@@ -78,6 +78,8 @@ struct OppRow {
     confidence: String,
     source_upload_unix: Option<i64>,
     is_stale: bool,
+    max_unit_price: Option<i64>,
+    lots: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -103,6 +105,10 @@ pub struct OpportunityView {
     pub confidence: String,
     pub source_upload_ms: Option<i64>,
     pub is_stale: bool,
+    /// Absent pour les scans antérieurs à l'enregistrement du détail.
+    pub max_unit_price: Option<i64>,
+    /// Annonces à acheter ; vide pour les anciens scans.
+    pub lots: Vec<crate::profit::Lot>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -167,7 +173,7 @@ pub async fn scan_results(
         "SELECT item_id, quality, sold_as, source_world_id, source_unit_price, units_to_buy,
                 source_cost, expected_sell_price, home_median_price, home_units_per_day,
                 days_of_supply, unit_profit, profit_per_trip, daily_profit, confidence,
-                source_upload_unix, is_stale
+                source_upload_unix, is_stale, max_unit_price, lots
          FROM opportunities WHERE scan_id = ? ORDER BY daily_profit DESC",
     )
     .bind(&run.scan_id)
@@ -212,6 +218,12 @@ pub async fn scan_results(
                 confidence: r.confidence,
                 source_upload_ms: r.source_upload_unix.map(|s| s * 1000),
                 is_stale: r.is_stale,
+                max_unit_price: r.max_unit_price,
+                lots: r
+                    .lots
+                    .as_deref()
+                    .and_then(|j| serde_json::from_str(j).ok())
+                    .unwrap_or_default(),
             }
         })
         .collect();
@@ -386,6 +398,8 @@ mod tests {
             confidence: "OK".into(),
             source_upload_ms: None,
             is_stale: false,
+            max_unit_price: Some(1),
+            lots: Vec::new(),
         }
     }
 

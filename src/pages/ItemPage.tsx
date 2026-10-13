@@ -8,6 +8,8 @@ import { PageHeader } from "@/components/Page";
 import { WatchButton } from "@/components/WatchButton";
 import { SalesChart } from "@/components/SalesChart";
 import { DataTable } from "@/components/DataTable";
+import { LotsTooltip } from "@/components/Lots";
+import { averagePrice } from "@/lib/purchase";
 import { columnHelper } from "@/lib/table";
 import { Age, ConfidenceBadge, ItemIcon, QualityTag } from "@/components/market";
 import {
@@ -207,8 +209,18 @@ const arbColumns = [
     header: "Q",
     cell: (c) => <QualityTag quality={c.getValue()} soldAs={c.row.original.soldAs} />,
   }),
-  arb.accessor("sourceUnitPrice", {
-    header: "Achat à",
+  arb.accessor((r) => averagePrice(r.lots, r.unitsToBuy, r.sourceCost), {
+    id: "averagePrice",
+    header: "Prix moyen",
+    cell: (c) => (
+      <LotsTooltip lots={c.row.original.lots} max={c.row.original.maxUnitPrice}>
+        {gil(c.getValue())}
+      </LotsTooltip>
+    ),
+    meta: { numeric: true },
+  }),
+  arb.accessor("maxUnitPrice", {
+    header: "Prix max",
     cell: (c) => gil(c.getValue()),
     meta: { numeric: true },
   }),

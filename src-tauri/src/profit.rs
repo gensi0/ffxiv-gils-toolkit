@@ -227,13 +227,24 @@ pub fn confidence(units_per_day: f64, days_of_supply: Option<f64>, p: &Params) -
     }
 }
 
+/// Annonce retenue pour l'achat : prix unitaire affiché (hors taxe) et quantité.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Lot {
+    pub price: u64,
+    pub quantity: u32,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Purchase {
     pub units: u64,
     /// Including the buyer tax.
     pub cost: f64,
     pub cheapest_unit_price: u64,
+    /// Prix unitaire de l'annonce retenue la plus chère.
+    pub max_unit_price: u64,
     pub listings: usize,
+    /// Annonces retenues, de la moins chère à la plus chère.
+    pub lots: Vec<Lot>,
 }
 
 /// Buys whole listings, cheapest first, while they stay under `breakeven`
@@ -251,7 +262,9 @@ pub fn plan_purchase(
         units: 0,
         cost: 0.0,
         cheapest_unit_price: 0,
+        max_unit_price: 0,
         listings: 0,
+        lots: Vec::new(),
     };
     let mut spent = 0u64;
     for l in sorted {
@@ -268,6 +281,11 @@ pub fn plan_purchase(
         out.units += qty;
         spent += l.price_per_unit * qty;
         out.listings += 1;
+        out.max_unit_price = l.price_per_unit;
+        out.lots.push(Lot {
+            price: l.price_per_unit,
+            quantity: l.quantity,
+        });
     }
     out.cost = spent as f64 * (1.0 + p.buyer_tax);
     out
@@ -281,6 +299,10 @@ pub struct Evaluation {
     pub sold_as: Quality,
     pub units_to_buy: u64,
     pub source_unit_price: u64,
+    /// Prix unitaire le plus élevé parmi les annonces à acheter.
+    pub max_unit_price: u64,
+    /// Annonces à acheter (prix hors taxe, quantité).
+    pub lots: Vec<Lot>,
     pub source_cost: f64,
     pub expected_sell: f64,
     pub home_median: f64,
@@ -317,6 +339,8 @@ pub fn evaluate(
         sold_as: home.quality,
         units_to_buy: buy.units,
         source_unit_price: buy.cheapest_unit_price,
+        max_unit_price: buy.max_unit_price,
+        lots: buy.lots,
         source_cost: buy.cost,
         expected_sell: home.expected_sell,
         home_median: home.median_7d,
@@ -527,6 +551,21 @@ mod tests {
         assert_eq!(buy.units, 6);
         assert_eq!(buy.listings, 2);
         assert_eq!(buy.cheapest_unit_price, 200);
+        assert_eq!(buy.max_unit_price, 250);
+        assert_eq!(
+            buy.lots,
+            vec![
+                Lot {
+                    price: 200,
+                    quantity: 4
+                },
+                Lot {
+                    price: 250,
+                    quantity: 2
+                }
+            ],
+            "le lot de 10 à 100, trop gros, n'est pas retenu"
+        );
         assert!((buy.cost - (200.0 * 4.0 + 250.0 * 2.0) * 1.05).abs() < 1e-6);
     }
 
