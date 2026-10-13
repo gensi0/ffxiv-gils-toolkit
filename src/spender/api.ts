@@ -86,11 +86,49 @@ export interface Deliveries {
 
 export type VentureClass = "combat" | "mineur" | "botaniste" | "pecheur";
 
-export const VENTURE_CLASSES: { id: VentureClass; label: string; stat: string }[] = [
-  { id: "combat", label: "Combat", stat: "Niveau d'objet moyen" },
-  { id: "mineur", label: "Mineur", stat: "Perception" },
-  { id: "botaniste", label: "Botaniste", stat: "Perception" },
-  { id: "pecheur", label: "Pêcheur", stat: "Perception" },
+export interface VentureClassInfo {
+  id: VentureClass;
+  label: string;
+  /** Job que doit avoir le servant. */
+  job: string;
+  /** Stat qui détermine le palier (quantité rapportée). */
+  tierStat: string;
+  /** Stat minimale pour accéder à la mission. */
+  requiredStat: string;
+}
+
+export const DEFAULT_CLASS: VentureClassInfo = {
+  id: "combat",
+  label: "Combat",
+  job: "un job de combat ou de mage",
+  tierStat: "Niveau d'objet moyen",
+  requiredStat: "Niveau d'objet moyen",
+};
+
+export const VENTURE_CLASSES: VentureClassInfo[] = [
+  DEFAULT_CLASS,
+
+  {
+    id: "mineur",
+    label: "Mineur",
+    job: "Mineur",
+    tierStat: "Perception",
+    requiredStat: "Récolte",
+  },
+  {
+    id: "botaniste",
+    label: "Botaniste",
+    job: "Botaniste",
+    tierStat: "Perception",
+    requiredStat: "Récolte",
+  },
+  {
+    id: "pecheur",
+    label: "Pêcheur",
+    job: "Pêcheur",
+    tierStat: "Perception",
+    requiredStat: "Récolte",
+  },
 ];
 
 export interface PricedVenture {
