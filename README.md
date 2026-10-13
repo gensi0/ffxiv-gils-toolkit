@@ -13,7 +13,7 @@ compris.
   notifications.
 - **Liste de courses** : opportunités choisies dans un scan, regroupées par centre
   de données et serveur, avec budget, bénéfice attendu et cases « acheté ».
-- **Recherche**, **Historique** et **Statistiques** du marché.
+- **Recherche** et **Statistiques** du dernier scan (seul le dernier scan réussi est conservé).
 
 **Dépenser**
 

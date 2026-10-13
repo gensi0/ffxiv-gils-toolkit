@@ -286,22 +286,6 @@ export interface ConfidenceBucket {
   totalDailyProfit: number;
 }
 
-export interface TopItem {
-  itemId: number;
-  name: string;
-  scanCount: number;
-  avgUnitProfit: number;
-  maxDailyProfit: number;
-  bestConfidence: Confidence;
-}
-
-export interface ScanPoint {
-  startedAt: number;
-  opportunitiesFound: number;
-  totalDailyProfit: number;
-  itemsScanned: number;
-}
-
 export interface RatioBucket {
   lower: number;
   label: string;
@@ -317,8 +301,6 @@ export interface MarketStats {
   dcRankings: DcStat[];
   regionRankings: RegionStat[];
   confidenceDist: ConfidenceBucket[];
-  topItems: TopItem[];
-  scanHistory: ScanPoint[];
   profitRatioDist: RatioBucket[];
 }
 

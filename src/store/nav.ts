@@ -5,7 +5,6 @@ export type Page =
   | "scan"
   | "watchlist"
   | "search"
-  | "history"
   | "courses"
   | "stats"
   | "settings"

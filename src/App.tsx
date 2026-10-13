@@ -7,7 +7,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useBackendEvents, useSettings } from "@/lib/queries";
 import { type Page, useNav } from "@/store/nav";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { HistoryPage } from "@/pages/HistoryPage";
 import { ItemPage } from "@/pages/ItemPage";
 import { WatchlistPage } from "@/pages/WatchlistPage";
 import { ScanPage } from "@/pages/ScanPage";
@@ -28,7 +27,6 @@ const PAGES: Record<Page, React.ComponentType> = {
   scan: ScanPage,
   watchlist: WatchlistPage,
   search: SearchPage,
-  history: HistoryPage,
   courses: ShoppingListPage,
   stats: StatsPage,
   settings: SettingsPage,
