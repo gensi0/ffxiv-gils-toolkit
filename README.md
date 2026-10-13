@@ -11,6 +11,8 @@ compris.
   Classés par gils par jour, pas par simple écart de prix.
 - **Suivi** : objets surveillés en direct (WebSocket Universalis), avec
   notifications.
+- **Liste de courses** : opportunités choisies dans un scan, regroupées par centre
+  de données et serveur, avec budget, bénéfice attendu et cases « acheté ».
 - **Recherche**, **Historique** et **Statistiques** du marché.
 
 **Dépenser**

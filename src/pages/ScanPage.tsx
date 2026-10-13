@@ -13,6 +13,7 @@ import { columnHelper } from "@/lib/table";
 import { EmptyState, PageHeader } from "@/components/Page";
 import { Age, ConfidenceBadge, ItemIcon, QualityTag } from "@/components/market";
 import { ScanButton, ScanProgressBar } from "@/components/ScanControls";
+import { CartButton } from "@/components/CartButton";
 import { TripCards } from "@/components/TripCards";
 import { api, errorMessage, type Candidate, type Opportunity, type ScanResults } from "@/lib/api";
 import { ago, decimal, gil } from "@/lib/format";
@@ -116,6 +117,11 @@ function RunSummary(props: {
 
 const oc = columnHelper<Opportunity>();
 const opportunityColumns = [
+  oc.display({
+    id: "cart",
+    header: "",
+    cell: (c) => <CartButton o={c.row.original} />,
+  }),
   oc.accessor((o) => o.item.name, {
     id: "item",
     header: "Objet",

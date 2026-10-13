@@ -1,7 +1,10 @@
 import { ConfidenceBadge, ItemIcon, QualityTag } from "@/components/market";
 import type { Opportunity, ScanResults, Trip } from "@/lib/api";
 import { gil, gilShort } from "@/lib/format";
+import { ShoppingCartIcon } from "lucide-react";
+import { CartButton } from "@/components/CartButton";
 import { useNav } from "@/store/nav";
+import { shoppingKey, useShoppingList } from "@/store/shoppingList";
 
 const INVENTORY_SLOTS = 140;
 
@@ -29,6 +32,11 @@ function TripCard({ trip, opportunities }: { trip: Trip; opportunities: Opportun
     (o, i) => o.sourceWorldId === trip.worldId && !picked.has(i),
   ).length;
   const crossRegion = items[0]?.crossRegion ?? false;
+  const addAll = useShoppingList((s) => s.add);
+  const allIn = useShoppingList((s) => {
+    const keys = new Set(s.items.map((i) => i.key));
+    return items.every((o) => keys.has(shoppingKey(o)));
+  });
 
   return (
     <section className="flex flex-col rounded-md border text-xs">
@@ -52,6 +60,17 @@ function TripCard({ trip, opportunities }: { trip: Trip; opportunities: Opportun
         </span>
         <span>{trip.travelMinutes} min aller-retour</span>
         <span>{items.length} objets</span>
+        <button
+          type="button"
+          disabled={allIn}
+          onClick={() => {
+            addAll(items);
+          }}
+          className="ml-auto inline-flex items-center gap-1 text-emerald-600 hover:underline disabled:text-muted-foreground disabled:no-underline dark:text-emerald-400"
+        >
+          <ShoppingCartIcon className="size-3" />
+          {allIn ? "Tout est dans la liste" : "Tout ajouter à la liste"}
+        </button>
       </div>
       <table className="w-full">
         <tbody>
@@ -74,8 +93,11 @@ function TripCard({ trip, opportunities }: { trip: Trip; opportunities: Opportun
                 {gil(o.unitsToBuy)} × {gil(o.sourceUnitPrice)}
               </td>
               <td className="px-2 text-right tabular-nums">{gil(o.profitPerTrip)}</td>
-              <td className="px-3 text-right">
+              <td className="px-1 text-right">
                 <ConfidenceBadge value={o.confidence} />
+              </td>
+              <td className="w-8 pr-2">
+                <CartButton o={o} />
               </td>
             </tr>
           ))}
