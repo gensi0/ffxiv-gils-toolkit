@@ -42,6 +42,8 @@ export interface Settings {
   notificationsEnabled: boolean;
   watchNotifyProfit: number;
   theme: Theme;
+  /** Noms de mes servants, pour reconnaître mes annonces. */
+  retainerNames: string[];
 }
 
 export interface AppInfo {
@@ -186,6 +188,72 @@ export interface ScanRun {
 }
 
 /** Annonce à acheter : prix unitaire affiché (hors taxe) et quantité. */
+// ---------- mes ventes et journal ----------
+
+export type ListingStatus = "active" | "pending" | "sold" | "removed";
+
+export interface MyListing {
+  listingId: string;
+  item: ItemInfo;
+  hq: boolean;
+  price: number;
+  quantity: number;
+  retainer: string;
+  firstSeen: number;
+  lastSeen: number;
+  status: ListingStatus;
+  /** Nouveau prix saisi après une modification en jeu, pas encore vu sur Universalis. */
+  expectedPrice: number | null;
+  /** Prix concurrent le plus bas quand on est passé sous mon prix. */
+  undercutPrice: number | null;
+  suggestedPrice: number | null;
+}
+
+export interface StockLine {
+  item: ItemInfo;
+  hq: boolean;
+  remaining: number;
+  avgCost: number;
+}
+
+export interface VentesOverview {
+  configured: boolean;
+  lastPollMs: number | null;
+  listings: MyListing[];
+  pending: MyListing[];
+  stock: StockLine[];
+  tracked: ItemInfo[];
+}
+
+export interface Purchase {
+  id: number;
+  item: ItemInfo;
+  hq: boolean;
+  quantity: number;
+  remaining: number;
+  unitCost: number;
+  boughtAt: number;
+  sourceWorld: string | null;
+}
+
+export interface JournalSale {
+  id: number;
+  item: ItemInfo;
+  hq: boolean;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+  soldAt: number;
+  cost: number;
+  costUnits: number;
+  source: "auto" | "manual";
+}
+
+export interface Journal {
+  purchases: Purchase[];
+  sales: JournalSale[];
+}
+
 export interface Lot {
   price: number;
   quantity: number;
@@ -334,10 +402,30 @@ export const EVENTS = {
   scanProgress: "scan-progress",
   watchUpdate: "watch-update",
   wsStatus: "ws-status",
+  ventesUpdate: "ventes-update",
 } as const;
 
 export const api = {
   listWorlds: () => invoke<World[]>("list_worlds"),
+  ventesOverview: () => invoke<VentesOverview>("ventes_overview"),
+  ventesRefresh: () => invoke<VentesOverview>("ventes_refresh"),
+  ventesSetPrice: (listingId: string, price: number) =>
+    invoke<null>("ventes_set_price", { listingId, price }),
+  ventesClose: (listingId: string, sold: boolean, price: number | null) =>
+    invoke<null>("ventes_close", { listingId, sold, price }),
+  ventesTrack: (itemId: number, on: boolean) => invoke<null>("ventes_track", { itemId, on }),
+  journalList: (sinceMs: number) => invoke<Journal>("journal_list", { sinceMs }),
+  journalAddPurchase: (p: {
+    itemId: number;
+    hq: boolean;
+    quantity: number;
+    unitCost: number;
+    sourceWorld: string | null;
+  }) => invoke<number>("journal_add_purchase", p),
+  journalDeletePurchase: (id: number) => invoke<null>("journal_delete_purchase", { id }),
+  journalAddSale: (s: { itemId: number; hq: boolean; quantity: number; unitPrice: number }) =>
+    invoke<null>("journal_add_sale", s),
+  journalDeleteSale: (id: number) => invoke<null>("journal_delete_sale", { id }),
   /** Taxe de vente de la semaine (en %) par cité, pour un serveur. */
   taxRates: (worldId: number) => invoke<Record<string, number>>("tax_rates", { worldId }),
   getSettings: () => invoke<Settings>("get_settings"),

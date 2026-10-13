@@ -12,7 +12,14 @@ compris.
 - **Suivi** : objets surveillés en direct (WebSocket Universalis), avec
   notifications.
 - **Liste de courses** : opportunités choisies dans un scan, regroupées par centre
-  de données et serveur, avec budget, bénéfice attendu et cases « acheté ».
+  de données et serveur, avec budget, bénéfice attendu et cases « acheté » (le prix
+  réellement payé est noté dans le journal).
+- **Mes ventes** : tes annonces sur ton serveur principal (reconnues par le nom de
+  tes servants), alerte quand quelqu'un passe devant toi avec le prix conseillé,
+  bouton « Prix modifié » quand tu changes un prix en jeu.
+- **Journal des gains** : ventes détectées automatiquement (annonce disparue +
+  vente identique dans l'historique Universalis), coût d'achat déduit dans
+  l'ordre d'achat, bénéfice réel et marge sur 7 jours, 30 jours ou 1 an.
 - **Recherche** et **Statistiques** du dernier scan (seul le dernier scan réussi est conservé).
 
 **Dépenser**

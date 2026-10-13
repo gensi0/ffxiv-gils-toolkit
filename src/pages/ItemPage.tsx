@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/Page";
+import { TrackSalesButton } from "@/components/TrackSalesButton";
 import { WatchButton } from "@/components/WatchButton";
 import { SalesChart } from "@/components/SalesChart";
 import { DataTable } from "@/components/DataTable";
@@ -49,6 +50,7 @@ function ItemView({ itemId, onBack }: { itemId: number; onBack: () => void }) {
         <ArrowLeftIcon />
         Retour
       </Button>
+      <TrackSalesButton itemId={itemId} />
       <WatchButton itemId={itemId} />
       <Button
         variant="outline"

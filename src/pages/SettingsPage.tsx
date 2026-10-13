@@ -121,6 +121,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
     watchNotifyProfit: String(initial.watchNotifyProfit),
   }));
   const [notificationsEnabled, setNotificationsEnabled] = useState(initial.notificationsEnabled);
+  const [retainerNames, setRetainerNames] = useState(initial.retainerNames.join(", "));
 
   const grouped = useMemo(() => groupWorlds(worlds), [worlds]);
   const home = worlds.find((w) => w.id === homeWorldId);
@@ -162,6 +163,10 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
         notificationsEnabled,
         watchNotifyProfit: n("watchNotifyProfit"),
         theme,
+        retainerNames: retainerNames
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0),
       },
       {
         onSuccess: () => {
@@ -355,6 +360,23 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                 "Valeur par défaut ; modifiable par objet.",
               )}
             </div>
+          </Section>
+
+          <Section title="Mes ventes">
+            <Field
+              label="Noms de mes servants"
+              htmlFor="retainer-names"
+              hint="Séparés par des virgules, tels qu'affichés en jeu. Sert à reconnaître tes annonces sur ton serveur principal pour suivre tes ventes."
+            >
+              <Input
+                id="retainer-names"
+                placeholder="Mogtaro, Lalanoir"
+                value={retainerNames}
+                onChange={(e) => {
+                  setRetainerNames(e.target.value);
+                }}
+              />
+            </Field>
           </Section>
 
           <Section title="Apparence">

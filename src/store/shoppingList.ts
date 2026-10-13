@@ -25,6 +25,8 @@ export interface ShoppingItem {
   profit: number;
   addedAt: number;
   bought: boolean;
+  /** Achat noté dans le journal des gains. */
+  purchaseId?: number;
 }
 
 export const shoppingKey = (o: Opportunity) =>
@@ -59,7 +61,7 @@ interface ShoppingState {
   add: (opps: Opportunity[]) => void;
   remove: (key: string) => void;
   toggle: (o: Opportunity) => void;
-  setBought: (key: string, bought: boolean) => void;
+  setBought: (key: string, bought: boolean, purchaseId?: number) => void;
   clearBought: () => void;
   clear: () => void;
 }
@@ -82,8 +84,12 @@ export const useShoppingList = create<ShoppingState>()(
         if (get().items.some((i) => i.key === key)) get().remove(key);
         else get().add([o]);
       },
-      setBought: (key, bought) => {
-        set({ items: get().items.map((i) => (i.key === key ? { ...i, bought } : i)) });
+      setBought: (key, bought, purchaseId) => {
+        set({
+          items: get().items.map((i) =>
+            i.key === key ? { ...i, bought, purchaseId: bought ? purchaseId : undefined } : i,
+          ),
+        });
       },
       clearBought: () => {
         set({ items: get().items.filter((i) => !i.bought) });

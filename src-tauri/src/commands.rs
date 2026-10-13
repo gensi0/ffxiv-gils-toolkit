@@ -9,6 +9,7 @@ use crate::results::{self, CandidateView, ScanResults, ScanRun};
 use crate::scan::{self, ScanProgress};
 use crate::settings::{self, Settings};
 use crate::stats::{self, MarketStats};
+use crate::ventes;
 use crate::watch::{self, WatchView, WsStatus};
 use crate::worlds::{self, World};
 use crate::xivapi::SearchHit;
@@ -175,4 +176,83 @@ pub async fn retry_failed_scan(app: AppHandle, scan_id: String) -> AppResult<()>
 #[tauri::command]
 pub async fn market_stats(state: State<'_, AppState>) -> AppResult<MarketStats> {
     stats::market_stats(&state.db).await
+}
+
+// ---------- mes ventes et journal ----------
+
+#[tauri::command]
+pub async fn ventes_overview(state: State<'_, AppState>) -> AppResult<ventes::Overview> {
+    ventes::overview(&state).await
+}
+
+/// Relève tout de suite au lieu d'attendre le prochain relevé automatique.
+#[tauri::command]
+pub async fn ventes_refresh(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<ventes::Overview> {
+    ventes::poll(&app).await?;
+    ventes::overview(&state).await
+}
+
+#[tauri::command]
+pub async fn ventes_set_price(
+    state: State<'_, AppState>,
+    listing_id: String,
+    price: i64,
+) -> AppResult<()> {
+    ventes::set_expected_price(&state, &listing_id, price).await
+}
+
+#[tauri::command]
+pub async fn ventes_close(
+    state: State<'_, AppState>,
+    listing_id: String,
+    sold: bool,
+    price: Option<i64>,
+) -> AppResult<()> {
+    ventes::close_listing(&state, &listing_id, sold, price).await
+}
+
+#[tauri::command]
+pub async fn ventes_track(state: State<'_, AppState>, item_id: u32, on: bool) -> AppResult<()> {
+    ventes::track(&state, item_id, on).await
+}
+
+#[tauri::command]
+pub async fn journal_list(state: State<'_, AppState>, since_ms: i64) -> AppResult<ventes::Journal> {
+    ventes::journal(&state, since_ms).await
+}
+
+#[tauri::command]
+pub async fn journal_add_purchase(
+    state: State<'_, AppState>,
+    item_id: u32,
+    hq: bool,
+    quantity: i64,
+    unit_cost: f64,
+    source_world: Option<String>,
+) -> AppResult<i64> {
+    ventes::add_purchase(&state, item_id, hq, quantity, unit_cost, source_world).await
+}
+
+#[tauri::command]
+pub async fn journal_delete_purchase(state: State<'_, AppState>, id: i64) -> AppResult<()> {
+    ventes::delete_purchase(&state, id).await
+}
+
+#[tauri::command]
+pub async fn journal_add_sale(
+    state: State<'_, AppState>,
+    item_id: u32,
+    hq: bool,
+    quantity: i64,
+    unit_price: i64,
+) -> AppResult<()> {
+    ventes::add_sale(&state, item_id, hq, quantity, unit_price).await
+}
+
+#[tauri::command]
+pub async fn journal_delete_sale(state: State<'_, AppState>, id: i64) -> AppResult<()> {
+    ventes::delete_sale(&state, id).await
 }
