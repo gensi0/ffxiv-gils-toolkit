@@ -17,29 +17,29 @@ export function StatusBar() {
   const backoffSecs = backoffUntil !== null ? Math.ceil((backoffUntil - now) / 1000) : 0;
   const wsLabel =
     ws?.state === "connected"
-      ? "Live: connected"
+      ? "Direct : connecté"
       : ws?.state === "connecting"
-        ? "Live: connecting…"
+        ? "Direct : connexion…"
         : ws?.state === "disconnected"
-          ? `Live: reconnecting in ${Math.max(0, Math.ceil((ws.retryAtMs - now) / 1000))}s`
+          ? `Direct : reconnexion dans ${Math.max(0, Math.ceil((ws.retryAtMs - now) / 1000))} s`
           : null;
   const netLabel =
     backoffSecs > 0
-      ? `Universalis: rate limited, retrying in ${backoffSecs}s`
+      ? `Universalis : limite de requêtes, nouvel essai dans ${backoffSecs} s`
       : net && net.inFlight > 0
-        ? `Universalis: ${net.inFlight} in flight`
-        : "Universalis: idle";
+        ? `Universalis : ${net.inFlight} en cours`
+        : "Universalis : inactif";
 
   return (
     <footer className="flex h-6 shrink-0 items-center gap-4 border-t px-3 text-[11px] text-muted-foreground">
       <span>
-        {home ? `${home.name} · ${home.dc}` : "No home world"}
-        {settings && ` · retainers in ${settings.retainerCity}`}
+        {home ? `${home.name} · ${home.dc}` : "Aucun serveur principal"}
+        {settings && ` · servants à ${settings.retainerCity}`}
       </span>
       {isRunning(scan) && scan && (
         <span className="text-foreground">
           {PHASE_LABEL[scan.phase]}{" "}
-          {scan.total > 0 && `${Math.round((scan.done / scan.total) * 100)}%`}
+          {scan.total > 0 && `${Math.round((scan.done / scan.total) * 100)} %`}
         </span>
       )}
       <span className={cn("ml-auto", backoffSecs > 0 && "text-amber-600 dark:text-amber-400")}>

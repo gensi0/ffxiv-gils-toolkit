@@ -10,6 +10,7 @@ mod results;
 mod scan;
 mod scope;
 mod settings;
+mod spender;
 mod stats;
 mod universalis;
 mod watch;
@@ -166,10 +167,11 @@ pub fn run() {
                 Ok::<_, error::AppError>(pool)
             })?;
             let http = reqwest::Client::builder()
-                .user_agent(concat!("ffxiv-trader/", env!("CARGO_PKG_VERSION")))
+                .user_agent(concat!("ffxiv-gils-toolkit/", env!("CARGO_PKG_VERSION")))
                 .gzip(true)
                 .build()?;
 
+            let data_dir_for_spender = data_dir.join("donnees-jeu.json");
             let (watch, watch_rx) = watch::WatchManager::new();
             app.manage(AppState {
                 universalis: universalis::Universalis::new(
@@ -184,6 +186,7 @@ pub fn run() {
                 log_dir,
                 _log_guard: log_guard,
             });
+            app.manage(spender::SpenderState::new(data_dir_for_spender));
             spawn_background(app.handle(), http);
             tauri::async_runtime::spawn(watch::run(app.handle().clone(), watch_rx));
             Ok(())
@@ -210,9 +213,17 @@ pub fn run() {
             commands::watchlist_set_threshold,
             commands::ws_status,
             commands::market_stats,
+            spender::spender_dataset_status,
+            spender::spender_build_dataset,
+            spender::spender_currencies,
+            spender::spender_offers,
+            spender::spender_gil_offers,
+            spender::spender_deliveries,
+            spender::spender_ventures,
+            spender::spender_desynths,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("erreur au lancement de l'application");
 }
 
 #[cfg(test)]

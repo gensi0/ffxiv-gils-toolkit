@@ -1,14 +1,14 @@
 import type { ScanPhase } from "./api";
 
-const gilFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-const decimalFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
+const gilFormat = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
+const decimalFormat = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 });
 
-/** 1234567 → "1,234,567". */
+/** 1234567 → "1 234 567". */
 export function gil(n: number | null | undefined): string {
   return n == null || !Number.isFinite(n) ? "—" : gilFormat.format(Math.round(n));
 }
 
-/** 1234567 → "1.2M", for dense cards. */
+/** 1234567 → "1,2M", for dense cards. */
 export function gilShort(n: number): string {
   const abs = Math.abs(n);
   if (abs >= 1e6) return `${decimalFormat.format(n / 1e6)}M`;
@@ -21,26 +21,26 @@ export function decimal(n: number | null | undefined): string {
 }
 
 export function percent(ratio: number): string {
-  return `${decimalFormat.format(ratio * 100)}%`;
+  return `${decimalFormat.format(ratio * 100)} %`;
 }
 
-/** Unix ms → "3h ago". */
+/** Unix ms → "il y a 3 h". */
 export function ago(ms: number | null | undefined, now = Date.now()): string {
   if (ms == null) return "—";
   const s = Math.max(0, Math.round((now - ms) / 1000));
-  if (s < 60) return "just now";
+  if (s < 60) return "à l'instant";
   const m = Math.round(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) return `il y a ${m} min`;
   const h = Math.round(m / 60);
-  if (h < 48) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
+  if (h < 48) return `il y a ${h} h`;
+  return `il y a ${Math.round(h / 24)} j`;
 }
 
-/** Seconds → "2m 05s". */
+/** Seconds → "2 min 05 s". */
 export function duration(secs: number): string {
   const m = Math.floor(secs / 60);
   const s = Math.round(secs % 60);
-  return m > 0 ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
+  return m > 0 ? `${m} min ${String(s).padStart(2, "0")} s` : `${s} s`;
 }
 
 /** Data older than this many hours is shown dimmed. */
@@ -51,11 +51,11 @@ export function isStale(ms: number | null | undefined, hours = STALE_HOURS, now 
 }
 
 export const PHASE_LABEL: Record<ScanPhase, string> = {
-  preparing: "Preparing",
-  prefilter: "Scanning prices",
-  drillDown: "Analyzing candidates",
-  saving: "Saving",
-  done: "Done",
-  failed: "Failed",
-  cancelled: "Cancelled",
+  preparing: "Préparation",
+  prefilter: "Analyse des prix",
+  drillDown: "Analyse des candidats",
+  saving: "Enregistrement",
+  done: "Terminé",
+  failed: "Échec",
+  cancelled: "Annulé",
 };

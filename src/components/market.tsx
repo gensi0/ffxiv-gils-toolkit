@@ -22,29 +22,29 @@ export function ItemIcon({ path, className }: { path: string | null; className?:
 
 const CONFIDENCE: Record<Confidence, { label: string; className: string; hint: string }> = {
   HOT: {
-    label: "Hot",
+    label: "Très demandé",
     className: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-    hint: "Sells ≥ 5 units/day with under a day of competing supply.",
+    hint: "Se vend à ≥ 5 unités/jour, avec moins d'un jour de stock concurrent.",
   },
   OK: {
     label: "OK",
     className: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
-    hint: "Steady demand, little competing supply.",
+    hint: "Demande régulière, peu de stock concurrent.",
   },
   COMPETITIVE: {
-    label: "Competitive",
+    label: "Concurrentiel",
     className: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-    hint: "3–7 days of competing supply listed near your price.",
+    hint: "3 à 7 jours de stock concurrent en vente près de ton prix.",
   },
   SATURATED: {
-    label: "Saturated",
+    label: "Saturé",
     className: "bg-red-500/15 text-red-600 dark:text-red-400",
-    hint: "More than 7 days of competing supply listed near your price.",
+    hint: "Plus de 7 jours de stock concurrent en vente près de ton prix.",
   },
   SLOW: {
-    label: "Slow",
+    label: "Lent",
     className: "bg-muted text-muted-foreground",
-    hint: "Under 0.5 units sold per day: stock may rot.",
+    hint: "Moins de 0,5 unité vendue par jour : le stock risque de stagner.",
   },
 };
 
@@ -72,7 +72,7 @@ export function QualityTag({ quality, soldAs }: { quality: "NQ" | "HQ"; soldAs?:
     <span className="text-[11px] text-muted-foreground">
       {quality}
       {soldAs && soldAs !== quality && (
-        <span title="HQ bought, sold into NQ demand"> → {soldAs}</span>
+        <span title="Acheté HQ, revendu sur la demande NQ"> → {soldAs}</span>
       )}
     </span>
   );
@@ -84,7 +84,7 @@ export function Age({ ms, staleHours }: { ms: number | null | undefined; staleHo
   return (
     <span
       className={cn("whitespace-nowrap", stale && "text-muted-foreground/60")}
-      title={ms ? new Date(ms).toLocaleString() : undefined}
+      title={ms ? new Date(ms).toLocaleString("fr-FR") : undefined}
     >
       {ago(ms)}
     </span>

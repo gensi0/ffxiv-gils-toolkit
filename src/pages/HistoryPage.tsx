@@ -17,26 +17,33 @@ const STATUS_CLASS: Record<ScanRun["status"], string> = {
   cancelled: "text-muted-foreground",
 };
 
+const STATUS_LABEL: Record<ScanRun["status"], string> = {
+  done: "Terminé",
+  running: "En cours",
+  failed: "Échec",
+  cancelled: "Annulé",
+};
+
 const c = columnHelper<ScanRun>();
 const columns = [
   c.accessor("startedAt", {
-    header: "Started",
-    cell: (v) => new Date(v.getValue()).toLocaleString(),
+    header: "Début",
+    cell: (v) => new Date(v.getValue()).toLocaleString("fr-FR"),
   }),
   c.accessor("status", {
-    header: "Status",
+    header: "Statut",
     cell: (v) => (
       <span
         className={cn("capitalize", STATUS_CLASS[v.getValue()])}
         title={v.row.original.error ?? undefined}
       >
-        {v.getValue()}
+        {STATUS_LABEL[v.getValue()]}
       </span>
     ),
   }),
   c.accessor((r) => (r.completedAt ? (r.completedAt - r.startedAt) / 1000 : undefined), {
     id: "duration",
-    header: "Duration",
+    header: "Durée",
     cell: (v) => {
       const secs = v.getValue();
       return secs === undefined ? "—" : duration(secs);
@@ -45,17 +52,17 @@ const columns = [
     sortUndefined: "last",
   }),
   c.accessor("itemsScanned", {
-    header: "Items",
+    header: "Objets",
     cell: (v) => gil(v.getValue()),
     meta: { numeric: true },
   }),
   c.accessor("itemsFailed", {
-    header: "Failed",
+    header: "Échecs",
     cell: (v) => gil(v.getValue()),
     meta: { numeric: true },
   }),
   c.accessor("opportunitiesFound", {
-    header: "Opportunities",
+    header: "Opportunités",
     cell: (v) => gil(v.getValue()),
     meta: { numeric: true },
   }),
@@ -66,12 +73,12 @@ export function HistoryPage() {
   const openScan = useNav((s) => s.openScan);
   return (
     <>
-      <PageHeader title="History" />
+      <PageHeader title="Historique" />
       {scans.isError ? (
         <div className="flex items-center gap-3 p-4 text-xs text-destructive">
           {errorMessage(scans.error)}
           <Button variant="outline" size="sm" onClick={() => void scans.refetch()}>
-            Retry
+            Réessayer
           </Button>
         </div>
       ) : !scans.data ? (
@@ -81,7 +88,7 @@ export function HistoryPage() {
           ))}
         </div>
       ) : scans.data.length === 0 ? (
-        <EmptyState message="No past scans." action={<ScanButton />} />
+        <EmptyState message="Aucun scan précédent." action={<ScanButton />} />
       ) : (
         <DataTable
           columns={columns}

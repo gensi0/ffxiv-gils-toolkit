@@ -1,7 +1,10 @@
+[workspace]
+members = [".", "core"]
+
 [package]
 name = "ffxiv-trader"
-version = "0.1.0"
-description = "FFXIV market board arbitrage scanner"
+version = "0.2.0"
+description = "FFXIV Gils Toolkit : arbitrage et dépense de monnaies à l'hôtel des ventes"
 authors = ["g3nsi"]
 edition = "2021"
 
@@ -16,6 +19,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+spender-core = { path = "core" }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }

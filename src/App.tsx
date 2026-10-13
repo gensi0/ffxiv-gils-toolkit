@@ -14,6 +14,13 @@ import { ScanPage } from "@/pages/ScanPage";
 import { SearchPage } from "@/pages/SearchPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { StatsPage } from "@/pages/StatsPage";
+import {
+  DeliveriesRoute,
+  DesynthRoute,
+  GilShopRoute,
+  MonnaiesRoute,
+  VenturesRoute,
+} from "@/spender/pages";
 
 const PAGES: Record<Page, React.ComponentType> = {
   dashboard: DashboardPage,
@@ -24,6 +31,11 @@ const PAGES: Record<Page, React.ComponentType> = {
   stats: StatsPage,
   settings: SettingsPage,
   item: ItemPage,
+  monnaies: MonnaiesRoute,
+  pnj: GilShopRoute,
+  livraisons: DeliveriesRoute,
+  servants: VenturesRoute,
+  desynthese: DesynthRoute,
 };
 
 export default function App() {

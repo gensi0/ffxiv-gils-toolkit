@@ -31,12 +31,12 @@ export function SearchPage() {
 
   return (
     <>
-      <PageHeader title="Search" />
+      <PageHeader title="Recherche" />
       <div className="flex items-center gap-2 border-b px-4 py-2">
         <SearchIcon className="size-3.5 text-muted-foreground" />
         <Input
           autoFocus
-          placeholder="Item name (2+ characters)"
+          placeholder="Nom de l'objet (2 caractères min.)"
           value={text}
           onChange={(e) => {
             setText(e.target.value);
@@ -51,11 +51,11 @@ export function SearchPage() {
         <div className="flex items-center gap-3 p-4 text-xs text-destructive">
           {errorMessage(search.error)}
           <Button variant="outline" size="sm" onClick={() => void search.refetch()}>
-            Retry
+            Réessayer
           </Button>
         </div>
       ) : query.length < 2 ? (
-        <EmptyState message="Type an item name to look it up." />
+        <EmptyState message="Tape le nom d'un objet pour le rechercher." />
       ) : search.isPending ? (
         <div className="flex flex-col gap-1 p-4">
           {Array.from({ length: 8 }, (_, i) => (
@@ -63,7 +63,7 @@ export function SearchPage() {
           ))}
         </div>
       ) : results.length === 0 ? (
-        <EmptyState message={`No marketable item matches “${query}”.`} />
+        <EmptyState message={`Aucun objet vendable à l'HV ne correspond à « ${query} ».`} />
       ) : (
         <ul className="min-h-0 flex-1 overflow-y-auto py-1">
           {results.map((hit) => (

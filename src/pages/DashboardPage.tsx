@@ -13,7 +13,7 @@ export function DashboardPage() {
   const results = useScanResults(null);
   return (
     <>
-      <PageHeader title="Dashboard">
+      <PageHeader title="Tableau de bord">
         <ScanButton />
       </PageHeader>
       <ScanProgressBar />
@@ -21,7 +21,7 @@ export function DashboardPage() {
         <div className="flex items-center gap-3 p-4 text-xs text-destructive">
           {errorMessage(results.error)}
           <Button variant="outline" size="sm" onClick={() => void results.refetch()}>
-            Retry
+            Réessayer
           </Button>
         </div>
       ) : results.isPending ? (
@@ -31,7 +31,7 @@ export function DashboardPage() {
         </div>
       ) : results.data === null ? (
         <EmptyState
-          message="No scan yet. A full scan takes a few minutes."
+          message="Aucun scan pour l'instant. Un scan complet prend quelques minutes."
           action={<ScanButton />}
         />
       ) : (
@@ -64,18 +64,20 @@ function Summary({ r }: { r: ScanResults }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Tile label="Last scan">
+        <Tile label="Dernier scan">
           <Age ms={r.run.startedAt} staleHours={12} />
         </Tile>
-        <Tile label="Opportunities">{r.opportunities.length}</Tile>
-        <Tile label="Expected gil / day (all)">{gilShort(totalDaily)}</Tile>
-        <Tile label="Best trip / hour">{trips[0] ? gilShort(trips[0].profitPerHour) : "—"}</Tile>
+        <Tile label="Opportunités">{r.opportunities.length}</Tile>
+        <Tile label="Gils / jour attendus (total)">{gilShort(totalDaily)}</Tile>
+        <Tile label="Meilleur trajet / heure">
+          {trips[0] ? gilShort(trips[0].profitPerHour) : "—"}
+        </Tile>
       </div>
 
       {trips.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-            Best source worlds
+            Meilleurs serveurs sources
           </h2>
           <div className="grid gap-3 md:grid-cols-3">
             {trips.map((t) => (
@@ -89,9 +91,9 @@ function Summary({ r }: { r: ScanResults }) {
                   </span>
                 </div>
                 <div className="mt-1 flex gap-3 text-[11px] text-muted-foreground">
-                  <span>{gil(t.profitPerTrip)} / trip</span>
-                  <span>{t.picked.length} items</span>
-                  <span>{t.slotsUsed}/140 slots</span>
+                  <span>{gil(t.profitPerTrip)} / trajet</span>
+                  <span>{t.picked.length} objets</span>
+                  <span>{t.slotsUsed}/140 emplacements</span>
                   <span>{t.travelMinutes} min</span>
                 </div>
               </div>
@@ -103,7 +105,7 @@ function Summary({ r }: { r: ScanResults }) {
       <section className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <h2 className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-            Top opportunities
+            Meilleures opportunités
           </h2>
           <Button
             variant="ghost"
@@ -112,23 +114,23 @@ function Summary({ r }: { r: ScanResults }) {
               openScan(null);
             }}
           >
-            All results
+            Tous les résultats
           </Button>
         </div>
         {top.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            The last scan found nothing above your thresholds.
+            Le dernier scan n'a rien trouvé au-dessus de tes seuils.
           </p>
         ) : (
           <table className="w-full text-xs">
             <thead className="text-muted-foreground">
               <tr className="border-b">
-                <th className="h-7 px-2 text-left font-medium">Item</th>
+                <th className="h-7 px-2 text-left font-medium">Objet</th>
                 <th className="px-2 text-left font-medium">Source</th>
-                <th className="px-2 text-right font-medium">Units</th>
-                <th className="px-2 text-right font-medium">Profit / trip</th>
-                <th className="px-2 text-right font-medium">Gil / day</th>
-                <th className="px-2 text-left font-medium">Confidence</th>
+                <th className="px-2 text-right font-medium">Unités</th>
+                <th className="px-2 text-right font-medium">Bénéfice / trajet</th>
+                <th className="px-2 text-right font-medium">Gils / jour</th>
+                <th className="px-2 text-left font-medium">Confiance</th>
               </tr>
             </thead>
             <tbody>

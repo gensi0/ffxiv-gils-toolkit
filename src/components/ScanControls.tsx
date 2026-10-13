@@ -20,7 +20,7 @@ export function ScanButton() {
     return (
       <Button variant="outline" size="sm" onClick={() => void api.cancelScan()}>
         <SquareIcon />
-        Cancel scan
+        Annuler le scan
       </Button>
     );
   }
@@ -33,7 +33,7 @@ export function ScanButton() {
       }}
     >
       {start.isPending ? <Loader2Icon className="animate-spin" /> : <PlayIcon />}
-      Run new scan
+      Lancer un scan
     </Button>
   );
 }
@@ -49,11 +49,11 @@ export function ScanProgressBar() {
       <Progress value={pct} className="h-1.5 flex-1" />
       <span className="w-40 shrink-0 text-right text-muted-foreground tabular-nums">
         {scan.done}/{scan.total}
-        {scan.etaSecs != null && ` · ${duration(scan.etaSecs)} left`}
+        {scan.etaSecs != null && ` · ${duration(scan.etaSecs)} restantes`}
       </span>
       {scan.itemsFailed > 0 && (
         <span className="shrink-0 text-amber-600 dark:text-amber-400">
-          {scan.itemsFailed} failed
+          {scan.itemsFailed} en échec
         </span>
       )}
     </div>

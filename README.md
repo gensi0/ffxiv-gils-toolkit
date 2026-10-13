@@ -1,116 +1,142 @@
-# FFXIV Trader
+# FFXIV Gils Toolkit
 
-Desktop app (macOS, Linux, Windows) that finds Final Fantasy XIV market board
-arbitrage: items cheaper on another world or data center than on your home
-world, that your home market will actually absorb within a few days. It ranks
-opportunities by expected gil per day, not by raw price gap.
+Application de bureau (macOS, Linux, Windows) pour gagner des gils à l'hôtel des
+ventes de Final Fantasy XIV. Tout est en français, noms d'objets et de marchands
+compris.
 
-Status: **v1 complete (M1–M6)** — settings, item search and detail with sales
-history, full scan with drill-down and the profit math, trips grouped by source
-world, live watchlist over the Universalis WebSocket with desktop notifications,
-and CI builds for macOS, Linux and Windows.
-Full spec: [`ffxiv-arbitrage-scanner-prompt.md`](ffxiv-arbitrage-scanner-prompt.md).
+**Marché**
 
-## The math in 90 seconds
+- **Scan** : objets moins chers sur un autre serveur ou centre de données que
+  sur ton serveur principal, et que ton marché absorbera en quelques jours.
+  Classés par gils par jour, pas par simple écart de prix.
+- **Suivi** : objets surveillés en direct (WebSocket Universalis), avec
+  notifications.
+- **Recherche**, **Historique** et **Statistiques** du marché.
 
-You buy on a visited world and always resell on your home world. A price gap
-alone is worthless if nobody buys at home, so every number is expressed in
-**units the home market absorbs**.
+**Dépenser**
 
-1. **Taxes.** The buyer pays a fixed 5% on top of the listed price; the seller
-   pays 0–5% depending on the retainer's city. So a unit costs
-   `listing × 1.05` and nets `sell × (1 − seller tax)`.
-2. **Home demand.** From the last 7 days of home sales: units sold per day
-   (sum of quantities, not sale events) and a quantity-weighted median price
-   with outliers dropped. You must undercut the cheapest credible home listing
-   (troll listings under half the median are ignored), so the expected sell
-   price is `min(median, floor − 1)`.
-3. **What to buy.** Listings must be bought whole. Take source listings
-   cheapest first while they stay under breakeven and the total stays within
-   what home sells during your sell horizon (`units/day × 3 days` by default).
-4. **Rank.** `profit per trip = units × net sale − cost`, and
-   `gil per day = profit per unit × min(units/day, units ÷ horizon)`. Results
-   are ranked by gil per day, with a confidence badge from home sell rate and
-   days of competing supply (HOT, OK, COMPETITIVE, SATURATED, SLOW).
-5. **Trips.** One trip collects everything worth buying on a world; per-world
-   profit per hour fills the 140 inventory slots most profitable first.
+- **Monnaies** : quoi acheter avec chaque monnaie (assignats, mémoquartz, sceaux,
+  tribus alliées, JcJ, chasse…) pour le revendre au meilleur prix.
+- **Revente PNJ** : objets vendus en gils par les marchands PNJ qui se revendent
+  plus cher à l'hôtel des ventes.
+- **Livraisons GC** : équipements à acheter pour les livrer contre des sceaux,
+  comparés à la valeur réelle d'un sceau sur ton serveur.
+- **Servants** : missions ciblées les plus rentables selon le niveau et le niveau
+  d'objet / la perception de ton servant.
+- **Désynthèse** : objets dont un résultat possible vaut plus que leur prix
+  (meilleur cas : les taux ne sont pas publics).
 
-An HQ unit can also be sold into NQ demand; the app picks whichever pays more.
-The full scan first prefilters ~17,000 items cheaply with Universalis'
-aggregated endpoint, then drills into the top 200 with full listings and
-history. All thresholds live in `src-tauri/src/profit.rs`.
+## Le calcul du scan en 90 secondes
 
-## Build and run
+Tu achètes sur un serveur visité et revends toujours sur ton serveur principal.
+Un écart de prix ne vaut rien si personne n'achète chez toi : tout est exprimé
+en **unités que ton marché absorbe**.
 
-Prerequisites: [Rust](https://rustup.rs) (stable), Node.js 20+, pnpm, and the
-[Tauri system dependencies](https://tauri.app/start/prerequisites/) for your OS.
+1. **Taxes.** L'acheteur paie 5 % en plus du prix affiché ; le vendeur paie 0 à
+   5 % selon la cité de son servant. Une unité coûte donc `annonce × 1,05` et
+   rapporte `vente × (1 − taxe vendeur)`.
+2. **Demande locale.** Sur les 7 derniers jours de ventes chez toi : unités
+   vendues par jour (somme des quantités, pas des ventes) et prix médian pondéré
+   par quantité, hors valeurs aberrantes. Il faut passer sous l'annonce crédible
+   la moins chère (les annonces « troll » sous la moitié de la médiane sont
+   ignorées) : prix de revente attendu `min(médiane, plancher − 1)`.
+3. **Quoi acheter.** Les annonces s'achètent en entier. On prend les moins
+   chères tant qu'elles restent sous le seuil de rentabilité et que le total ne
+   dépasse pas ce que ton marché vend sur l'horizon de vente
+   (`unités/jour × 3 jours` par défaut).
+4. **Classement.** `bénéfice par trajet = unités × vente nette − coût`, et
+   `gils par jour = bénéfice unitaire × min(unités/jour, unités ÷ horizon)`. Un
+   badge de confiance résume la vitesse de vente et la concurrence.
+5. **Trajets.** Un trajet regroupe tout ce qui vaut la peine sur un serveur ; le
+   bénéfice horaire remplit les 140 places d'inventaire, les plus rentables
+   d'abord.
+
+Une unité HQ peut aussi répondre à une demande NQ ; l'app choisit ce qui paie le
+mieux. Le scan préfiltre d'abord ~17 000 objets via l'API agrégée d'Universalis,
+puis analyse en détail les 200 meilleurs. Tous les seuils sont dans
+`src-tauri/src/profit.rs`.
+
+## Lancer et compiler
+
+Prérequis : [Rust](https://rustup.rs) (stable), Node.js 20+, pnpm et les
+[dépendances système de Tauri](https://tauri.app/start/prerequisites/).
 
 ```sh
 pnpm install
-pnpm tauri dev      # run with hot reload
-pnpm tauri build    # release bundle for the current platform
+pnpm tauri dev      # lancement avec rechargement à chaud
+pnpm tauri build    # paquet pour la plateforme courante
 ```
 
-Checks:
+Vérifications :
 
 ```sh
 pnpm typecheck && pnpm lint && pnpm format:check
 pnpm rs:lint && pnpm rs:test
-# end-to-end against the live APIs (network, ~2 min)
+# de bout en bout contre les API réelles (réseau, ~2 min)
 cargo test --manifest-path src-tauri/Cargo.toml live_ -- --ignored --nocapture
+# outils « Dépenser » : jeu de données réel + top d'une monnaie sur un serveur
+cargo run --manifest-path src-tauri/Cargo.toml -p spender-core --example live -- Moogle 41784
 ```
 
-App data (SQLite database) lives in the OS app-data directory
-(`~/Library/Application Support/app.ffxivtrader` on macOS); daily-rotated logs
-(7 days) in the OS log directory. Settings → About → "Open log folder".
+Organisation du code :
 
-## Releases
+- `src-tauri/src` : scan, suivi, statistiques (SQLite) et commandes des outils
+  « Dépenser » (`spender.rs`) ;
+- `src-tauri/core` : crate `spender-core`, indépendante de Tauri, logique des
+  outils « Dépenser » ;
+- `src/` : interface React, outils « Dépenser » dans `src/spender`.
 
-Push a version tag to build every target and get a **draft** GitHub release
-with the installers attached (`.dmg`, `.deb`, `.AppImage`, `.msi`):
+Les données (base SQLite, données du jeu) sont dans le dossier de données de
+l'application (`~/Library/Application Support/app.ffxivtrader` sur macOS) ; les
+journaux (7 jours) dans le dossier de logs du système. Paramètres → À propos →
+« Ouvrir le dossier des journaux ».
+
+## Versions
+
+Pousser un tag de version compile toutes les cibles et crée une release GitHub
+**brouillon** avec les installeurs (`.dmg`, `.deb`, `.AppImage`, `.msi`) :
 
 ```sh
-# bump "version" in src-tauri/tauri.conf.json and package.json first
-git tag v0.2.0 && git push origin v0.2.0
+# mettre à jour "version" dans src-tauri/tauri.conf.json et package.json avant
+git tag v0.3.0 && git push origin v0.3.0
 ```
 
-CI (`.github/workflows/ci.yml`) runs typecheck, lint, format, rustfmt, clippy
-and the Rust tests on every push and pull request.
+La CI (`.github/workflows/ci.yml`) lance typecheck, lint, format, rustfmt,
+clippy et les tests Rust à chaque push et pull request.
 
-### Opening an unsigned build on macOS
+### Ouvrir un build non signé
 
-v1 builds are not signed or notarized, so Gatekeeper blocks the first launch
-("cannot be opened because the developer cannot be verified"). Either:
+- **macOS** : après l'avoir copiée dans Applications,
+  `xattr -cr "/Applications/FFXIV Gils Toolkit.app"`, ou clic droit → **Ouvrir**
+  → **Ouvrir** une fois.
+- **Windows** : sur « Windows a protégé votre ordinateur », **Informations
+  complémentaires** → **Exécuter quand même**.
 
-- right-click the app in Finder → **Open** → **Open**, once; or
-- clear the quarantine flag after copying it to Applications:
-  `xattr -dr com.apple.quarantine "/Applications/FFXIV Trader.app"`
+### Activer la signature
 
-On Windows, SmartScreen shows "Windows protected your PC": click **More info**
-→ **Run anyway**.
+Le workflow de release signe automatiquement si ces secrets existent dans le
+dépôt :
 
-### Enabling signing
+- macOS : `APPLE_CERTIFICATE` (.p12 en base64), `APPLE_CERTIFICATE_PASSWORD`,
+  `APPLE_SIGNING_IDENTITY`, et pour la notarisation `APPLE_ID`, `APPLE_PASSWORD`
+  (mot de passe d'application), `APPLE_TEAM_ID`.
+- Windows : `WINDOWS_CERTIFICATE` (.pfx en base64), `WINDOWS_CERTIFICATE_PASSWORD`.
 
-The release workflow signs automatically once these repository secrets exist:
+## Données hors ligne
 
-- macOS: `APPLE_CERTIFICATE` (base64 .p12), `APPLE_CERTIFICATE_PASSWORD`,
-  `APPLE_SIGNING_IDENTITY`, and for notarization `APPLE_ID`, `APPLE_PASSWORD`
-  (app-specific password), `APPLE_TEAM_ID`.
-- Windows: `WINDOWS_CERTIFICATE` (base64 .pfx), `WINDOWS_CERTIFICATE_PASSWORD`.
+Si XIVAPI est injoignable, les noms, icônes et tailles de pile viennent d'un
+extrait embarqué de la feuille des objets (`src-tauri/data/items-fallback.tsv.gz`,
+issu de [ffxiv-datamining](https://github.com/xivapi/ffxiv-datamining)). À
+régénérer après un patch avec `python3 scripts/gen_item_fallback.py`.
 
-## Offline item data
+## Sources
 
-If XIVAPI is unreachable, item names, icons and stack sizes come from a bundled
-subset of the game's item sheet (`src-tauri/data/items-fallback.tsv.gz`, from
-[ffxiv-datamining](https://github.com/xivapi/ffxiv-datamining)). Refresh it after
-a game patch with `python3 scripts/gen_item_fallback.py`.
-
-## Attribution
-
-- Market data from [universalis.app](https://universalis.app).
-- Item data from [XIVAPI](https://v2.xivapi.com) and
+- Prix : [universalis.app](https://universalis.app).
+- Données du jeu : [XIVAPI](https://v2.xivapi.com) et
   [ffxiv-datamining](https://github.com/xivapi/ffxiv-datamining).
-- This app only reads Universalis data; it never uploads anything.
+- Résultats de désynthèse : données communautaires de
+  [Teamcraft](https://github.com/ffxiv-teamcraft/ffxiv-teamcraft).
+- L'application ne fait que lire ces données ; elle n'envoie rien.
 
-FFXIV Trader is a fan tool, not affiliated with or endorsed by Square Enix.
+FFXIV Gils Toolkit est un outil de fan, ni affilié ni approuvé par Square Enix.
 FINAL FANTASY XIV © SQUARE ENIX CO., LTD.

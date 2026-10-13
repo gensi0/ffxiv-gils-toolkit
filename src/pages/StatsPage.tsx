@@ -21,6 +21,7 @@ import { ConfidenceBadge } from "@/components/market";
 import { gil } from "@/lib/format";
 import { useMarketStats } from "@/lib/queries";
 import { errorMessage } from "@/lib/api";
+import { CONFIDENCE_LABEL, REGION_LABEL } from "@/lib/labels";
 import type { Confidence, RegionStat } from "@/lib/api";
 
 // ---------- helpers ----------
@@ -107,7 +108,7 @@ export function StatsPage() {
   if (isPending) {
     return (
       <>
-        <PageHeader title="Stats" />
+        <PageHeader title="Statistiques" />
         <div className="space-y-4 p-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-32 w-full" />
@@ -120,7 +121,7 @@ export function StatsPage() {
   if (error) {
     return (
       <>
-        <PageHeader title="Stats" />
+        <PageHeader title="Statistiques" />
         <EmptyState message={errorMessage(error)} />
       </>
     );
@@ -130,32 +131,32 @@ export function StatsPage() {
 
   return (
     <>
-      <PageHeader title="Stats" />
+      <PageHeader title="Statistiques" />
       <div className="space-y-8 overflow-y-auto p-4">
         {/* ── Overview ── */}
-        <Section title="Overview">
+        <Section title="Vue d'ensemble">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard
-              label="Total scans"
+              label="Scans au total"
               value={data.totalScans.toString()}
               tip="Nombre de scans complétés depuis le premier lancement."
             />
             <StatCard
-              label="Total opportunities"
-              value={data.totalOpportunities.toLocaleString()}
-              sub={`~${data.avgOppsPerScan.toFixed(1)} per scan`}
-              tip="Nombre total d'opportunités d'arbitrage trouvées sur tous tes scans. Une opportunité = un item moins cher sur un autre monde que chez toi."
+              label="Opportunités au total"
+              value={data.totalOpportunities.toLocaleString("fr-FR")}
+              sub={`~${data.avgOppsPerScan.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} par scan`}
+              tip="Nombre total d'opportunités d'arbitrage trouvées sur tous tes scans. Une opportunité = un objet moins cher sur un autre serveur que chez toi."
             />
             <StatCard
-              label="Best scan (gil/day)"
+              label="Meilleur scan (gils/jour)"
               value={gil(data.bestScanDailyProfit)}
-              sub="single scan total"
+              sub="total d'un seul scan"
               tip="Meilleur scan en valeur totale : somme des profits journaliers estimés de toutes les opportunités trouvées dans ce scan."
             />
             <StatCard
-              label="Unique worlds sourced"
+              label="Serveurs sources distincts"
               value={data.worldRankings.length.toString()}
-              tip="Nombre de mondes distincts qui ont produit au moins une opportunité d'achat sur l'ensemble de tes scans."
+              tip="Nombre de serveurs distincts qui ont produit au moins une opportunité d'achat sur l'ensemble de tes scans."
             />
           </div>
         </Section>
@@ -163,7 +164,7 @@ export function StatsPage() {
         {/* ── Scan history ── */}
         {hasHistory && (
           <Section
-            title="Scan history — opportunities over time"
+            title="Historique des scans — opportunités dans le temps"
             tip="Évolution de tes scans dans le temps. Bleu = nb d'opportunités trouvées, orange = profit journalier total estimé (en milliers de gils)."
           >
             <div className="rounded-lg border bg-card p-3">
@@ -202,8 +203,8 @@ export function StatsPage() {
                     }}
                     formatter={(value: unknown, name: unknown) =>
                       name === "profit"
-                        ? [`${value as number}k g/day`, "Daily profit"]
-                        : [`${value as number}`, "Opps"]
+                        ? [`${value as number}k gils/jour`, "Bénéfice journalier"]
+                        : [`${value as number}`, "Opportunités"]
                     }
                   />
                   <Line
@@ -225,7 +226,7 @@ export function StatsPage() {
                 </LineChart>
               </ResponsiveContainer>
               <p className="mt-1 text-center text-[10px] text-muted-foreground">
-                Blue = opportunities · Orange = total gil/day (k)
+                Bleu = opportunités · Orange = total gils/jour (k)
               </p>
             </div>
           </Section>
@@ -234,8 +235,8 @@ export function StatsPage() {
         {/* ── World rankings ── */}
         {data.worldRankings.length > 0 && (
           <Section
-            title="Best source worlds (by total gil/day across all scans)"
-            tip="Classement des mondes sources par profit journalier cumulé sur tous tes scans. Un monde en tête = il a régulièrement des prix bas sur des items que tu peux revendre chez toi."
+            title="Meilleurs serveurs sources (gils/jour cumulés sur tous les scans)"
+            tip="Classement des serveurs sources par profit journalier cumulé sur tous tes scans. Un serveur en tête = il a régulièrement des prix bas sur des objets que tu peux revendre chez toi."
           >
             <div className="rounded-lg border bg-card p-3">
               <ResponsiveContainer
@@ -278,8 +279,8 @@ export function StatsPage() {
                     }}
                     formatter={(v: unknown, name: unknown) =>
                       name === "profit"
-                        ? [`${String(v)}k gil/day`, "Total profit"]
-                        : [`${String(v)}%`, "Avg gap"]
+                        ? [`${String(v)}k gils/jour`, "Bénéfice total"]
+                        : [`${String(v)} %`, "Écart moyen"]
                     }
                   />
                   <Bar dataKey="profit" radius={[0, 3, 3, 0]} fillOpacity={0.8} />
@@ -292,30 +293,30 @@ export function StatsPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b bg-muted/30 text-muted-foreground">
-                    <th className="px-3 py-2 text-left font-medium">World</th>
+                    <th className="px-3 py-2 text-left font-medium">Serveur</th>
                     <th className="px-3 py-2 text-left font-medium">DC</th>
                     <th className="px-3 py-2 text-right font-medium">
                       <span className="inline-flex items-center justify-end gap-1">
-                        Opps
-                        <InfoTip text="Nombre total d'opportunités sourcées depuis ce monde sur l'ensemble des scans." />
+                        Opp.
+                        <InfoTip text="Nombre total d'opportunités trouvées sur ce serveur sur l'ensemble des scans." />
                       </span>
                     </th>
                     <th className="px-3 py-2 text-right font-medium">
                       <span className="inline-flex items-center justify-end gap-1">
-                        Avg gap
-                        <InfoTip text="Écart moyen entre le prix d'achat sur ce monde et le prix médian chez toi, exprimé en % du prix maison. +50% = tu achètes en moyenne 50% moins cher que le médian chez toi." />
+                        Écart moyen
+                        <InfoTip text="Écart moyen entre le prix d'achat sur ce serveur et le prix médian chez toi, exprimé en % du prix maison. +50% = tu achètes en moyenne 50% moins cher que le médian chez toi." />
                       </span>
                     </th>
                     <th className="px-3 py-2 text-right font-medium">
                       <span className="inline-flex items-center justify-end gap-1">
-                        Gil/day
-                        <InfoTip text="Somme des profits journaliers estimés pour toutes les opportunités de ce monde, cumulées sur tous les scans." />
+                        Gils/jour
+                        <InfoTip text="Somme des profits journaliers estimés pour toutes les opportunités de ce serveur, cumulées sur tous les scans." />
                       </span>
                     </th>
                     <th className="px-3 py-2 text-left font-medium">
                       <span className="inline-flex items-center gap-1">
-                        Best
-                        <InfoTip text="Meilleur niveau de confiance observé : HOT = demande très forte, OK = demande correcte, COMPETITIVE = marché disputé, SATURATED = offre > demande, SLOW = vente lente." />
+                        Meilleure
+                        <InfoTip text="Meilleur niveau de confiance observé : Très demandé = demande très forte, OK = demande correcte, Concurrentiel = marché disputé, Saturé = offre > demande, Lent = vente lente." />
                       </span>
                     </th>
                   </tr>
@@ -327,7 +328,7 @@ export function StatsPage() {
                       <td className="px-3 py-1.5 text-muted-foreground">{w.dc}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{w.totalOpps}</td>
                       <td className="px-3 py-1.5 text-right text-emerald-500 tabular-nums">
-                        +{w.avgGapPct.toFixed(0)}%
+                        +{w.avgGapPct.toFixed(0)} %
                       </td>
                       <td className="px-3 py-1.5 text-right tabular-nums">
                         {gil(w.totalDailyProfit)}
@@ -346,7 +347,7 @@ export function StatsPage() {
         {/* ── DC rankings ── */}
         {data.dcRankings.length > 0 && (
           <Section
-            title="Data center comparison"
+            title="Comparaison des centres de données"
             tip="Comparaison des datacenters par profit total disponible. Utile pour savoir sur quel DC concentrer tes trips."
           >
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -355,16 +356,18 @@ export function StatsPage() {
                   <div className="flex items-center justify-between">
                     <span className="font-semibold">{dc.dc}</span>
                     <Badge variant="outline" className="text-[10px]">
-                      {dc.worldCount} worlds
+                      {dc.worldCount} serveurs
                     </Badge>
                   </div>
                   <p className="text-xl font-semibold text-amber-500 tabular-nums">
                     {gil(dc.totalDailyProfit)}
-                    <span className="text-xs font-normal text-muted-foreground"> gil/day</span>
+                    <span className="text-xs font-normal text-muted-foreground"> gils/jour</span>
                   </p>
                   <div className="flex gap-3 text-xs text-muted-foreground">
-                    <span>{dc.totalOpps.toLocaleString()} opps</span>
-                    <span className="text-emerald-500">+{dc.avgGapPct.toFixed(0)}% avg gap</span>
+                    <span>{dc.totalOpps.toLocaleString("fr-FR")} opp.</span>
+                    <span className="text-emerald-500">
+                      +{dc.avgGapPct.toFixed(0)} % d'écart moyen
+                    </span>
                   </div>
                 </div>
               ))}
@@ -375,30 +378,32 @@ export function StatsPage() {
         {/* ── Region rankings ── */}
         {data.regionRankings.length > 0 && (
           <Section
-            title="Region comparison"
+            title="Comparaison des régions"
             tip="Vue macro par région de jeu (Europe, Japan, North-America, Oceania). Utile si tu actives les trips cross-région dans tes settings."
           >
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {data.regionRankings.map((r: RegionStat) => (
                 <div key={r.region} className="space-y-1 rounded-lg border bg-card p-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold">{r.region}</span>
+                    <span className="font-semibold">{REGION_LABEL[r.region] ?? r.region}</span>
                     <div className="flex gap-1">
                       <Badge variant="outline" className="text-[10px]">
                         {r.dcCount} DC
                       </Badge>
                       <Badge variant="outline" className="text-[10px]">
-                        {r.worldCount} W
+                        {r.worldCount} serv.
                       </Badge>
                     </div>
                   </div>
                   <p className="text-xl font-semibold text-amber-500 tabular-nums">
                     {gil(r.totalDailyProfit)}
-                    <span className="text-xs font-normal text-muted-foreground"> gil/day</span>
+                    <span className="text-xs font-normal text-muted-foreground"> gils/jour</span>
                   </p>
                   <div className="flex gap-3 text-xs text-muted-foreground">
-                    <span>{r.totalOpps.toLocaleString()} opps</span>
-                    <span className="text-emerald-500">+{r.avgGapPct.toFixed(0)}% avg gap</span>
+                    <span>{r.totalOpps.toLocaleString("fr-FR")} opp.</span>
+                    <span className="text-emerald-500">
+                      +{r.avgGapPct.toFixed(0)} % d'écart moyen
+                    </span>
                   </div>
                 </div>
               ))}
@@ -410,21 +415,25 @@ export function StatsPage() {
         <div className="grid gap-6 md:grid-cols-2">
           {data.confidenceDist.length > 0 && (
             <Section
-              title="Opportunity confidence distribution"
-              tip="Répartition de tes opportunités par niveau de confiance. HOT = item très demandé (vente < 1j), OK = demande correcte, COMPETITIVE = beaucoup de vendeurs, SATURATED = offre > demande, SLOW = vente incertaine."
+              title="Répartition des opportunités par confiance"
+              tip="Répartition de tes opportunités par niveau de confiance. Très demandé = vente en moins d'un jour, OK = demande correcte, Concurrentiel = beaucoup de vendeurs, Saturé = offre > demande, Lent = vente incertaine."
             >
               <div className="rounded-lg border bg-card p-3">
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
                     <Pie
-                      data={data.confidenceDist.map((c) => ({ ...c, fill: CONF_COLOR[c.label] }))}
+                      data={data.confidenceDist.map((c) => ({
+                        ...c,
+                        name: CONFIDENCE_LABEL[c.label] ?? c.label,
+                        fill: CONF_COLOR[c.label],
+                      }))}
                       dataKey="count"
-                      nameKey="label"
+                      nameKey="name"
                       cx="50%"
                       cy="50%"
                       outerRadius={70}
                       label={(props: PieLabelRenderProps) =>
-                        `${props.name ?? ""} ${((props.percent ?? 0) * 100).toFixed(0)}%`
+                        `${props.name ?? ""} ${((props.percent ?? 0) * 100).toFixed(0)} %`
                       }
                       labelLine={false}
                     ></Pie>
@@ -435,7 +444,7 @@ export function StatsPage() {
                         borderRadius: "6px",
                         fontSize: 11,
                       }}
-                      formatter={(v: unknown) => [(v as number).toLocaleString(), "count"]}
+                      formatter={(v: unknown) => [(v as number).toLocaleString("fr-FR"), "nombre"]}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -445,8 +454,8 @@ export function StatsPage() {
 
           {data.profitRatioDist.length > 0 && (
             <Section
-              title="Price gap distribution (unit profit / home median)"
-              tip="Distribution des opportunités selon l'écart de prix relatif. Une barre haute à droite = beaucoup d'items très bon marché ailleurs. Idéal pour identifier si ton marché est globalement cher ou compétitif."
+              title="Répartition des écarts de prix (bénéfice unitaire / médiane locale)"
+              tip="Distribution des opportunités selon l'écart de prix relatif. Une barre haute à droite = beaucoup d'objets très bon marché ailleurs. Idéal pour identifier si ton marché est globalement cher ou compétitif."
             >
               <div className="rounded-lg border bg-card p-3">
                 <ResponsiveContainer width="100%" height={180}>
@@ -467,7 +476,10 @@ export function StatsPage() {
                         borderRadius: "6px",
                         fontSize: 11,
                       }}
-                      formatter={(v: unknown) => [(v as number).toLocaleString(), "opportunities"]}
+                      formatter={(v: unknown) => [
+                        (v as number).toLocaleString("fr-FR"),
+                        "opportunités",
+                      ]}
                     />
                     <Bar dataKey="count" fill="#3b82f6" fillOpacity={0.8} radius={[3, 3, 0, 0]} />
                   </BarChart>
@@ -480,33 +492,33 @@ export function StatsPage() {
         {/* ── Top items ── */}
         {data.topItems.length > 0 && (
           <Section
-            title="Most recurring arbitrage items"
-            tip="Items qui apparaissent le plus souvent comme opportunités d'arbitrage sur tes scans. Un item récurrent = bonne cible pour la watchlist."
+            title="Objets d'arbitrage les plus récurrents"
+            tip="Objets qui apparaissent le plus souvent comme opportunités d'arbitrage sur tes scans. Un objet récurrent = bonne cible pour le suivi."
           >
             <div className="rounded-lg border">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b bg-muted/30 text-muted-foreground">
-                    <th className="px-3 py-2 text-left font-medium">Item</th>
+                    <th className="px-3 py-2 text-left font-medium">Objet</th>
                     <th className="px-3 py-2 text-right font-medium">
                       <span className="inline-flex items-center justify-end gap-1">
                         Scans
-                        <InfoTip text="Nombre de scans distincts où cet item est apparu comme opportunité rentable." />
+                        <InfoTip text="Nombre de scans distincts où cet objet est apparu comme opportunité rentable." />
                       </span>
                     </th>
                     <th className="px-3 py-2 text-right font-medium">
                       <span className="inline-flex items-center justify-end gap-1">
-                        Avg profit/unit
+                        Bénéfice moy./unité
                         <InfoTip text="Profit moyen par unité achetée = prix de vente estimé chez toi − coût d'achat − taxes vendeur." />
                       </span>
                     </th>
                     <th className="px-3 py-2 text-right font-medium">
                       <span className="inline-flex items-center justify-end gap-1">
-                        Best gil/day
-                        <InfoTip text="Meilleur profit journalier estimé observé pour cet item sur un seul scan (profit/unité × unités vendues par jour)." />
+                        Meilleurs gils/jour
+                        <InfoTip text="Meilleur profit journalier estimé observé pour cet objet sur un seul scan (profit/unité × unités vendues par jour)." />
                       </span>
                     </th>
-                    <th className="px-3 py-2 text-left font-medium">Confidence</th>
+                    <th className="px-3 py-2 text-left font-medium">Confiance</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -514,7 +526,7 @@ export function StatsPage() {
                     <tr key={item.itemId} className="border-b last:border-0 hover:bg-muted/20">
                       <td className="px-3 py-1.5 font-medium">
                         {item.name || (
-                          <span className="text-muted-foreground">Item #{item.itemId}</span>
+                          <span className="text-muted-foreground">Objet n°{item.itemId}</span>
                         )}
                       </td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{item.scanCount}</td>

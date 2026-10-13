@@ -33,7 +33,7 @@ import { useAppInfo, useSaveSettings, useSettings, useWorlds } from "@/lib/queri
 export function SettingsPage({ firstLaunch = false }: { firstLaunch?: boolean }) {
   const settings = useSettings();
   const worlds = useWorlds();
-  const title = firstLaunch ? "Setup" : "Settings";
+  const title = firstLaunch ? "Configuration" : "Paramètres";
 
   const error = settings.error ?? worlds.error;
   if (error) {
@@ -50,7 +50,7 @@ export function SettingsPage({ firstLaunch = false }: { firstLaunch?: boolean })
               void worlds.refetch();
             }}
           >
-            Retry
+            Réessayer
           </Button>
         </div>
       </>
@@ -164,7 +164,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
       },
       {
         onSuccess: () => {
-          if (!firstLaunch) toast.success("Settings saved");
+          if (!firstLaunch) toast.success("Paramètres enregistrés");
         },
         onError: (err) => toast.error(errorMessage(err)),
       },
@@ -187,31 +187,31 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
 
   return (
     <>
-      <PageHeader title={firstLaunch ? "Setup" : "Settings"} />
+      <PageHeader title={firstLaunch ? "Configuration" : "Paramètres"} />
       <form onSubmit={onSubmit} className="flex-1 overflow-y-auto">
         <div className="flex max-w-2xl flex-col gap-6 p-4">
           {firstLaunch && (
             <p className="text-xs text-muted-foreground">
-              Pick your home world to start. Everything here can be changed later.
+              Choisis ton serveur principal pour commencer. Tout peut être modifié plus tard.
             </p>
           )}
 
-          <Section title="Home">
+          <Section title="Serveur principal">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Home world" htmlFor="home-world">
+              <Field label="Serveur principal" htmlFor="home-world">
                 <Select
                   value={homeWorldId === null ? "" : String(homeWorldId)}
                   onValueChange={onHomeChange}
                 >
                   <SelectTrigger id="home-world" className="w-full">
-                    <SelectValue placeholder="Select a world" />
+                    <SelectValue placeholder="Choisir un serveur" />
                   </SelectTrigger>
                   <SelectContent className="max-h-80">
                     {grouped.map(([region, dcs]) =>
                       dcs.map(([dc, list]) => (
                         <SelectGroup key={dc}>
                           <SelectLabel>
-                            {dc} · {region}
+                            {dc} · {REGION_LABELS[region] ?? region}
                           </SelectLabel>
                           {list.map((w) => (
                             <SelectItem key={w.id} value={String(w.id)}>
@@ -225,9 +225,9 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                 </Select>
               </Field>
               <Field
-                label="Retainer city"
+                label="Ville des servants"
                 htmlFor="retainer-city"
-                hint="Where your selling retainers are. Sets the seller tax (0–5%)."
+                hint="Ville où vendent tes servants. Détermine la taxe de vente (0–5 %)."
               >
                 <Select
                   value={retainerCity}
@@ -241,14 +241,14 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                   <SelectContent>
                     {RETAINER_CITIES.map((c) => (
                       <SelectItem key={c} value={c}>
-                        {c}
+                        {CITY_LABELS[c]}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </Field>
             </div>
-            <Field label="Item name language" htmlFor="language">
+            <Field label="Langue des noms d'objets" htmlFor="language">
               <ToggleGroup
                 id="language"
                 type="single"
@@ -261,15 +261,15 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                 className="self-start"
               >
                 {LANGUAGES.map((l) => (
-                  <ToggleGroupItem key={l} value={l} className="uppercase">
-                    {l}
+                  <ToggleGroupItem key={l} value={l}>
+                    {LANGUAGE_LABELS[l]}
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
             </Field>
           </Section>
 
-          <Section title="Source scope">
+          <Section title="Périmètre des sources">
             {home ? (
               <div className="flex flex-col gap-2">
                 <RegionRow
@@ -277,7 +277,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                   grouped={grouped}
                   checked
                   disabled
-                  note="home region"
+                  note="région principale"
                 />
                 {otherRegions.map((r) => (
                   <RegionRow
@@ -285,51 +285,55 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                     region={r}
                     grouped={grouped}
                     checked={extraRegions.includes(r)}
-                    note="cross-region · slower travel"
+                    note="autre région · trajet plus long"
                     onChange={(on) => {
                       setExtraRegions((prev) => (on ? [...prev, r] : prev.filter((x) => x !== r)));
                     }}
                   />
                 ))}
                 <p className="text-[11px] text-muted-foreground">
-                  Only tick regions your Data Center Travel currently allows.
+                  Ne cochez que les régions accessibles via le voyage entre centres de données.
                 </p>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">Pick a home world first.</p>
+              <p className="text-xs text-muted-foreground">Choisis d'abord un serveur principal.</p>
             )}
             <div className="grid grid-cols-2 gap-3">
-              {numberInput("travelMinutesInRegion", "Trip time, in region (min)")}
-              {numberInput("travelMinutesCrossRegion", "Trip time, cross-region (min)")}
+              {numberInput("travelMinutesInRegion", "Durée du trajet, même région (min)")}
+              {numberInput("travelMinutesCrossRegion", "Durée du trajet, autre région (min)")}
             </div>
           </Section>
 
-          <Section title="Thresholds">
+          <Section title="Seuils">
             <div className="grid grid-cols-2 gap-3">
-              {numberInput("minProfitPerTrip", "Min profit per trip (gil)")}
-              {numberInput("minUnitsPerDay", "Min home sell rate (units/day)")}
+              {numberInput("minProfitPerTrip", "Bénéfice min. par trajet (gils)")}
+              {numberInput("minUnitsPerDay", "Ventes min. sur le serveur principal (unités/jour)")}
               {numberInput(
                 "sellHorizonDays",
-                "Sell horizon (days)",
-                "How long you accept holding stock.",
+                "Horizon de vente (jours)",
+                "Durée pendant laquelle tu acceptes de garder du stock.",
               )}
               {numberInput(
                 "maxDataAgeHours",
-                "Data freshness limit (h)",
-                "Skip source and home worlds with older uploads.",
+                "Âge max. des données (h)",
+                "Ignore les serveurs (source et principal) dont les données sont plus anciennes.",
               )}
             </div>
           </Section>
 
-          <Section title="Scan">
+          <Section title="Analyse">
             <div className="grid grid-cols-3 gap-3">
-              {numberInput("minMarginPct", "Min margin (%)", "Prefilter: estimated profit / cost.")}
-              {numberInput("drillDownTopN", "Items analyzed in depth", "Top prefilter candidates.")}
-              {numberInput("scanIntervalHours", "Auto-scan every (h)", "0 = off.")}
+              {numberInput("minMarginPct", "Marge min. (%)", "Préfiltre : bénéfice estimé / coût.")}
+              {numberInput(
+                "drillDownTopN",
+                "Objets analysés en détail",
+                "Meilleurs candidats du préfiltre.",
+              )}
+              {numberInput("scanIntervalHours", "Analyse auto toutes les (h)", "0 = désactivée.")}
             </div>
           </Section>
 
-          <Section title="Watchlist">
+          <Section title="Suivi">
             <div className="flex items-center gap-2">
               <Checkbox
                 id="notifications"
@@ -338,18 +342,20 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                   setNotificationsEnabled(c === true);
                 }}
               />
-              <Label htmlFor="notifications">Desktop notifications on big movers</Label>
+              <Label htmlFor="notifications">
+                Notifications de bureau sur les fortes variations
+              </Label>
             </div>
             <div className="grid grid-cols-3 gap-3">
               {numberInput(
                 "watchNotifyProfit",
-                "Notify above (gil / trip)",
-                "Default; each item can override it.",
+                "Notifier au-delà de (gils / trajet)",
+                "Valeur par défaut ; modifiable par objet.",
               )}
             </div>
           </Section>
 
-          <Section title="Appearance">
+          <Section title="Apparence">
             <ToggleGroup
               type="single"
               variant="outline"
@@ -360,15 +366,15 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
               }}
               className="self-start"
             >
-              <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
-              <ToggleGroupItem value="light">Light</ToggleGroupItem>
+              <ToggleGroupItem value="dark">Sombre</ToggleGroupItem>
+              <ToggleGroupItem value="light">Clair</ToggleGroupItem>
             </ToggleGroup>
           </Section>
 
           <div>
             <Button type="submit" disabled={!valid || save.isPending}>
               {save.isPending && <Loader2Icon className="animate-spin" />}
-              {firstLaunch ? "Start" : "Save"}
+              {firstLaunch ? "Commencer" : "Enregistrer"}
             </Button>
           </div>
 
@@ -382,15 +388,15 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
 function About() {
   const { data: info } = useAppInfo();
   return (
-    <Section title="About">
+    <Section title="À propos">
       <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
-        <p className="text-foreground">FFXIV Trader {info && `v${info.version}`}</p>
-        <p>Market data from universalis.app. Item data from XIVAPI.</p>
+        <p className="text-foreground">FFXIV Gils Toolkit {info && `v${info.version}`}</p>
+        <p>Données de l'HV : universalis.app. Données des objets : XIVAPI.</p>
         <p>
-          This app only reads Universalis data. It never uploads anything and has no uploader
-          integration.
+          Cette application lit uniquement les données Universalis. Elle n'envoie jamais rien et
+          n'intègre aucun uploader.
         </p>
-        <p>Fan tool, not affiliated with Square Enix. FINAL FANTASY XIV © SQUARE ENIX CO., LTD.</p>
+        <p>Outil de fan, non affilié à Square Enix. FINAL FANTASY XIV © SQUARE ENIX CO., LTD.</p>
         <div className="flex items-center gap-2 pt-1">
           <Button
             type="button"
@@ -401,7 +407,7 @@ function About() {
             }}
           >
             <FolderOpenIcon />
-            Open log folder
+            Ouvrir le dossier des journaux
           </Button>
           {info && <span className="truncate text-[11px]">{info.dataDir}</span>}
         </div>
@@ -451,13 +457,39 @@ function RegionRow(props: {
         disabled={props.disabled}
         onCheckedChange={(c) => props.onChange?.(c === true)}
       />
-      <Label htmlFor={id}>{props.region}</Label>
+      <Label htmlFor={id}>{REGION_LABELS[props.region] ?? props.region}</Label>
       <span className="text-[11px] text-muted-foreground">
         {dcs.join(", ")} · {props.note}
       </span>
     </div>
   );
 }
+
+const LANGUAGE_LABELS: Record<Language, string> = {
+  en: "English",
+  fr: "Français",
+  de: "Deutsch",
+  ja: "日本語",
+};
+
+const CITY_LABELS: Record<RetainerCity, string> = {
+  "Limsa Lominsa": "Limsa Lominsa",
+  Gridania: "Gridania",
+  "Ul'dah": "Ul'dah",
+  Ishgard: "Ishgard",
+  Kugane: "Kugane",
+  Crystarium: "Cristarium",
+  "Old Sharlayan": "Vieille Sharlayan",
+  Tuliyollal: "Tuliyollal",
+};
+
+/** Display names for region identifiers (values stay untranslated). */
+const REGION_LABELS: Record<string, string> = {
+  Europe: "Europe",
+  "North-America": "Amérique du Nord",
+  Oceania: "Océanie",
+  Japan: "Japon",
+};
 
 const REGION_ORDER = ["Europe", "North-America", "Oceania", "Japan"];
 const regionRank = (r: string) => {

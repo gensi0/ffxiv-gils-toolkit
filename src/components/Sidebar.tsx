@@ -1,26 +1,52 @@
 import {
+  BarChart2Icon,
+  CoinsIcon,
+  HammerIcon,
   HistoryIcon,
   LayoutDashboardIcon,
   type LucideIcon,
+  PackageCheckIcon,
   RadarIcon,
   SearchIcon,
   SettingsIcon,
   StarIcon,
-  BarChart2Icon,
+  StoreIcon,
+  UsersIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type Page, useNav } from "@/store/nav";
 
-const ITEMS: { page: Page; label: string; icon: LucideIcon }[] = [
-  { page: "dashboard", label: "Dashboard", icon: LayoutDashboardIcon },
-  { page: "scan", label: "Scan", icon: RadarIcon },
-  { page: "watchlist", label: "Watchlist", icon: StarIcon },
-  { page: "search", label: "Search", icon: SearchIcon },
-  { page: "history", label: "History", icon: HistoryIcon },
-  { page: "stats", label: "Stats", icon: BarChart2Icon },
+interface Item {
+  page: Page;
+  label: string;
+  icon: LucideIcon;
+}
+
+const SECTIONS: { title: string; items: Item[] }[] = [
+  {
+    title: "Marché",
+    items: [
+      { page: "dashboard", label: "Tableau de bord", icon: LayoutDashboardIcon },
+      { page: "scan", label: "Scan", icon: RadarIcon },
+      { page: "watchlist", label: "Suivi", icon: StarIcon },
+      { page: "search", label: "Recherche", icon: SearchIcon },
+      { page: "history", label: "Historique", icon: HistoryIcon },
+      { page: "stats", label: "Statistiques", icon: BarChart2Icon },
+    ],
+  },
+  {
+    title: "Dépenser",
+    items: [
+      { page: "monnaies", label: "Monnaies", icon: CoinsIcon },
+      { page: "pnj", label: "Revente PNJ", icon: StoreIcon },
+      { page: "livraisons", label: "Livraisons GC", icon: PackageCheckIcon },
+      { page: "servants", label: "Servants", icon: UsersIcon },
+      { page: "desynthese", label: "Désynthèse", icon: HammerIcon },
+    ],
+  },
 ];
 
-function NavButton({ page, label, icon: Icon }: { page: Page; label: string; icon: LucideIcon }) {
+function NavButton({ page, label, icon: Icon }: Item) {
   const current = useNav((s) => s.page);
   const setPage = useNav((s) => s.setPage);
   return (
@@ -43,12 +69,19 @@ function NavButton({ page, label, icon: Icon }: { page: Page; label: string; ico
 export function Sidebar() {
   return (
     <nav className="flex w-44 shrink-0 flex-col gap-0.5 border-r bg-sidebar p-2">
-      <div className="px-2 pt-1 pb-2 text-xs font-semibold tracking-tight">FFXIV Trader</div>
-      {ITEMS.map((item) => (
-        <NavButton key={item.page} {...item} />
+      <div className="px-2 pt-1 pb-2 text-xs font-semibold tracking-tight">FFXIV Gils Toolkit</div>
+      {SECTIONS.map((s) => (
+        <section key={s.title} className="mb-2 flex flex-col gap-0.5">
+          <h2 className="px-2 py-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+            {s.title}
+          </h2>
+          {s.items.map((item) => (
+            <NavButton key={item.page} {...item} />
+          ))}
+        </section>
       ))}
       <div className="mt-auto">
-        <NavButton page="settings" label="Settings" icon={SettingsIcon} />
+        <NavButton page="settings" label="Paramètres" icon={SettingsIcon} />
       </div>
     </nav>
   );

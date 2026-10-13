@@ -1,7 +1,19 @@
 import { create } from "zustand";
 
 export type Page =
-  "dashboard" | "scan" | "watchlist" | "search" | "history" | "stats" | "settings" | "item";
+  | "dashboard"
+  | "scan"
+  | "watchlist"
+  | "search"
+  | "history"
+  | "stats"
+  | "settings"
+  | "item"
+  | "monnaies"
+  | "pnj"
+  | "livraisons"
+  | "servants"
+  | "desynthese";
 
 interface NavState {
   page: Page;

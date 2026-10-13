@@ -1205,7 +1205,7 @@ dependencies = [
 
 [[package]]
 name = "ffxiv-trader"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bson",
  "flate2",
@@ -1214,6 +1214,7 @@ dependencies = [
  "reqwest 0.12.28",
  "serde",
  "serde_json",
+ "spender-core",
  "sqlx",
  "tauri",
  "tauri-build",
@@ -4188,6 +4189,20 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
+]
+
+[[package]]
+name = "spender-core"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
