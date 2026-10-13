@@ -6,7 +6,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/Page";
-import { ItemCell, PriceCell } from "@/spender/cells";
+import { ItemIcon } from "@/components/market";
+import { PriceCell } from "@/spender/cells";
 import {
   Filter,
   FilterBar,
@@ -16,7 +17,14 @@ import {
   RefreshButton,
   WorldSelect,
 } from "@/spender/common";
-import { spenderApi, VENTURE_CLASSES, type PricedVenture, type VentureClass } from "@/spender/api";
+import {
+  spenderApi,
+  DEFAULT_CLASS,
+  VENTURE_CLASSES,
+  type PricedVenture,
+  type VentureClass,
+  type VentureClassInfo,
+} from "@/spender/api";
 import { ago, decimal, gil } from "@/lib/format";
 import { useRefresh, useVentures, venturesKey } from "@/spender/queries";
 import { columnHelper } from "@/lib/table";
@@ -38,23 +46,58 @@ interface Row extends PricedVenture {
 function evaluate(v: PricedVenture, r: Retainer): Row {
   const tier = 1 + v.thresholds.filter((t) => t > 0 && r.stat >= t).length;
   const quantity = v.quantities[tier - 1] ?? v.quantities[0] ?? 0;
+  // Combat : le niveau d'objet sert aux deux. Récolteurs : l'accès dépend de la
+  // récolte, la quantité de la perception.
+  const access = v.class === "combat" ? r.stat : (r.gathering ?? r.stat);
   return {
     ...v,
-    available: r.level >= v.retainerLevel && r.stat >= v.requiredStat,
+    available: r.level >= v.retainerLevel && access >= v.requiredStat,
     tier,
     quantity,
     gilPerVenture: v.unitPrice == null ? null : v.unitPrice * quantity * (1 - TAX),
   };
 }
 
-function columns(statLabel: string) {
+function columns(info: VentureClassInfo) {
+  const statLabel = info.tierStat;
   const c = columnHelper<Row>();
   return [
     c.accessor("name", {
-      header: "Objet rapporté",
-      cell: (cell) => <ItemCell name={cell.getValue()} icon={cell.row.original.icon} />,
+      header: () => (
+        <Hint
+          label="Mission à lancer"
+          hint="Dans la liste des missions de ton servant, chaque mission ciblée porte le nom de l'objet qu'elle rapporte, avec son niveau."
+        />
+      ),
+      cell: (cell) => {
+        const v = cell.row.original;
+        return (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="flex cursor-help items-center gap-2">
+                <ItemIcon path={v.icon} className="size-5" />
+                <span className="max-w-72 truncate">{v.name}</span>
+                <span className="text-muted-foreground">niv. {v.retainerLevel}</span>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-80">
+              Parle à ton servant ({info.job}) → Tâches de servant → missions de sa classe → choisis
+              « {v.name} » (niveau {v.retainerLevel}). Durée 1 h, coût 1 jeton de mission.
+            </TooltipContent>
+          </Tooltip>
+        );
+      },
     }),
-    c.accessor("retainerLevel", { header: "Niv. requis", meta: { numeric: true } }),
+    c.accessor("requiredStat", {
+      header: () => (
+        <Hint
+          label={info.requiredStat === info.tierStat ? "Niv. d'objet requis" : "Récolte requise"}
+          hint={`${info.requiredStat} minimale du servant pour que la mission apparaisse dans sa liste.`}
+        />
+      ),
+      cell: (cell) => (cell.getValue() > 0 ? cell.getValue() : "—"),
+      meta: { numeric: true },
+    }),
     c.accessor("tier", {
       header: () => (
         <Hint
@@ -131,10 +174,10 @@ export function VenturesPage() {
   const world = useSpenderWorld();
   const data = useVentures(world);
   const refresh = useRefresh(venturesKey(world), () => spenderApi.ventures(world, true));
-  const statLabel =
-    VENTURE_CLASSES.find((c) => c.id === prefs.ventureClass)?.stat ?? "Niveau d'objet moyen";
+  const info: VentureClassInfo =
+    VENTURE_CLASSES.find((c) => c.id === prefs.ventureClass) ?? DEFAULT_CLASS;
   const retainer = prefs.retainers[prefs.ventureClass];
-  const cols = useMemo(() => columns(statLabel), [statLabel]);
+  const cols = useMemo(() => columns(info), [info]);
 
   const rows = useMemo(
     () =>
@@ -196,8 +239,21 @@ export function VenturesPage() {
             onChange={setNumber("level")}
           />
         </div>
+        {info.requiredStat !== info.tierStat && (
+          <div className="flex items-center gap-1.5">
+            <Label htmlFor="ret-gathering">{info.requiredStat}</Label>
+            <Input
+              id="ret-gathering"
+              type="number"
+              min={0}
+              className="h-7 w-20 text-xs"
+              value={retainer.gathering ?? retainer.stat}
+              onChange={setNumber("gathering")}
+            />
+          </div>
+        )}
         <div className="flex items-center gap-1.5">
-          <Label htmlFor="ret-stat">{statLabel}</Label>
+          <Label htmlFor="ret-stat">{info.tierStat}</Label>
           <Input
             id="ret-stat"
             type="number"
@@ -220,6 +276,10 @@ export function VenturesPage() {
           {data.dataUpdatedAt > 0 && ` · prix ${ago(data.dataUpdatedAt)}`}
         </span>
       </FilterBar>
+      <p className="border-b px-4 py-1.5 text-[11px] text-muted-foreground">
+        Pour lancer une mission : parle à ton servant ({info.job}) → Tâches de servant → choisis
+        dans la liste de sa classe la mission qui porte le nom de l'objet, au niveau indiqué.
+      </p>
 
       <Loadable error={data.error} pending={data.isPending} onRetry={() => void data.refetch()}>
         {rows.length === 0 ? (

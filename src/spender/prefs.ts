@@ -5,10 +5,12 @@ import type { VentureClass } from "@/spender/api";
 
 export type Tab = "monnaies" | "pnj" | "livraisons" | "servants" | "desynthese";
 
-/** Servant : niveau et niveau d'objet / perception, par classe. */
+/** Servant, par classe : niveau, stat des paliers (niveau d'objet ou
+ *  perception) et, pour les récolteurs, la récolte qui donne accès aux missions. */
 export interface Retainer {
   level: number;
   stat: number;
+  gathering?: number;
 }
 
 interface Prefs {
@@ -42,9 +44,9 @@ export const usePrefs = create<Prefs>()(
       ventureClass: "combat",
       retainers: {
         combat: { level: 100, stat: 700 },
-        mineur: { level: 100, stat: 4000 },
-        botaniste: { level: 100, stat: 4000 },
-        pecheur: { level: 100, stat: 4000 },
+        mineur: { level: 100, stat: 4000, gathering: 4000 },
+        botaniste: { level: 100, stat: 4000, gathering: 4000 },
+        pecheur: { level: 100, stat: 4000, gathering: 4000 },
       },
       sorting: {
         monnaies: [{ id: "gilPerCurrency", desc: true }],
