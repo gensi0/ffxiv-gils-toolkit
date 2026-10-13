@@ -19,6 +19,20 @@ pub async fn list_worlds(state: State<'_, AppState>) -> AppResult<Vec<World>> {
     worlds::load(&state.db).await
 }
 
+/// Taxes de vente de la semaine par cité (en %) pour un serveur.
+#[tauri::command]
+pub async fn tax_rates(
+    state: State<'_, AppState>,
+    world_id: i64,
+) -> AppResult<std::collections::HashMap<String, u8>> {
+    let worlds = worlds::load(&state.db).await?;
+    let world = worlds
+        .iter()
+        .find(|w| w.id == world_id)
+        .ok_or_else(|| AppError::Invalid(format!("serveur {world_id} introuvable")))?;
+    state.universalis.tax_rates(&world.name).await
+}
+
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> AppResult<Settings> {
     settings::load(&state.db).await
