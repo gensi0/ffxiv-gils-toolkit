@@ -140,5 +140,7 @@ régénérer après un patch avec `python3 scripts/gen_item_fallback.py`.
   [Teamcraft](https://github.com/ffxiv-teamcraft/ffxiv-teamcraft).
 - L'application ne fait que lire ces données ; elle n'envoie rien.
 
+Code sous licence [MIT](LICENSE).
+
 FFXIV Gils Toolkit est un outil de fan, ni affilié ni approuvé par Square Enix.
 FINAL FANTASY XIV © SQUARE ENIX CO., LTD.
