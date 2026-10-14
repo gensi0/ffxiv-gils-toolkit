@@ -80,6 +80,8 @@ pub struct Settings {
     pub theme: Theme,
     /// Noms de mes servants, pour reconnaître mes annonces (casse ignorée).
     pub retainer_names: Vec<String>,
+    /// Alerte quand une de mes annonces sort de ce rang (1 = la moins chère).
+    pub sales_top_rank: u32,
 }
 
 impl Default for Settings {
@@ -102,6 +104,7 @@ impl Default for Settings {
             watch_notify_profit: 100_000,
             theme: Theme::Dark,
             retainer_names: Vec::new(),
+            sales_top_rank: 1,
         }
     }
 }
@@ -140,6 +143,9 @@ impl Settings {
         }
         if !(1..=2000).contains(&self.drill_down_top_n) {
             return invalid("drill-down size must be between 1 and 2000".into());
+        }
+        if !(1..=50).contains(&self.sales_top_rank) {
+            return invalid("le rang visé doit être entre 1 et 50".into());
         }
         if self.watch_notify_profit < 0 {
             return invalid("notification threshold must be >= 0".into());

@@ -195,6 +195,16 @@ pub async fn ventes_refresh(
     ventes::overview(&state).await
 }
 
+/// Relevé complet du serveur pour retrouver toutes mes annonces.
+#[tauri::command]
+pub async fn ventes_discover(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> AppResult<ventes::Overview> {
+    ventes::discover(&app).await?;
+    ventes::overview(&state).await
+}
+
 #[tauri::command]
 pub async fn ventes_set_price(
     state: State<'_, AppState>,

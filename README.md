@@ -14,8 +14,10 @@ compris.
 - **Liste de courses** : opportunités choisies dans un scan, regroupées par centre
   de données et serveur, avec budget, bénéfice attendu et cases « acheté » (le prix
   réellement payé est noté dans le journal).
-- **Mes ventes** : tes annonces sur ton serveur principal (reconnues par le nom de
-  tes servants), alerte quand quelqu'un passe devant toi avec le prix conseillé,
+- **Mes ventes** : toutes les annonces de tes servants, retrouvées en parcourant le
+  marché de ton serveur (reconnues par leur nom), avec ton rang face à la
+  concurrence, l'écart avec le moins cher, l'étiquette « Acheté » et ta marge pour
+  ce qui vient de la liste de courses. Alerte quand une annonce sort de ton top X,
   bouton « Prix modifié » quand tu changes un prix en jeu.
 - **Journal des gains** : ventes détectées automatiquement (annonce disparue +
   vente identique dans l'historique Universalis), coût d'achat déduit dans

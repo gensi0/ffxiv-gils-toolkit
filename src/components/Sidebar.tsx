@@ -61,7 +61,8 @@ function NavButton({ page, label, icon: Icon }: Item) {
   const ventes = useVentes();
   const alerts =
     (ventes.data?.pending.length ?? 0) +
-    (ventes.data?.listings.filter((l) => l.undercutPrice !== null).length ?? 0);
+    (ventes.data?.listings.filter((l) => l.rank !== null && l.rank > ventes.data.topRank).length ??
+      0);
   return (
     <button
       type="button"

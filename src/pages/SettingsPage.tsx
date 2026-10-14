@@ -85,6 +85,7 @@ interface NumberFields {
   drillDownTopN: string;
   scanIntervalHours: string;
   watchNotifyProfit: string;
+  salesTopRank: string;
 }
 
 const NUMBER_RULES: Record<keyof NumberFields, { integer: boolean; min: number }> = {
@@ -98,6 +99,7 @@ const NUMBER_RULES: Record<keyof NumberFields, { integer: boolean; min: number }
   drillDownTopN: { integer: true, min: 1 },
   scanIntervalHours: { integer: true, min: 0 },
   watchNotifyProfit: { integer: true, min: 0 },
+  salesTopRank: { integer: true, min: 1 },
 };
 
 function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: boolean }) {
@@ -119,6 +121,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
     drillDownTopN: String(initial.drillDownTopN),
     scanIntervalHours: String(initial.scanIntervalHours),
     watchNotifyProfit: String(initial.watchNotifyProfit),
+    salesTopRank: String(initial.salesTopRank),
   }));
   const [notificationsEnabled, setNotificationsEnabled] = useState(initial.notificationsEnabled);
   const [retainerNames, setRetainerNames] = useState(initial.retainerNames.join(", "));
@@ -145,6 +148,11 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
     e.preventDefault();
     if (!valid) return;
     const n = (k: Exclude<keyof NumberFields, "minMarginPct">) => parsed[k] ?? initial[k];
+    const names = retainerNames
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    const namesChanged = names.join("|") !== initial.retainerNames.join("|");
     save.mutate(
       {
         homeWorldId,
@@ -162,15 +170,15 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
         scanIntervalHours: n("scanIntervalHours"),
         notificationsEnabled,
         watchNotifyProfit: n("watchNotifyProfit"),
+        salesTopRank: n("salesTopRank"),
         theme,
-        retainerNames: retainerNames
-          .split(",")
-          .map((s) => s.trim())
-          .filter((s) => s.length > 0),
+        retainerNames: names,
       },
       {
         onSuccess: () => {
           if (!firstLaunch) toast.success("Paramètres enregistrés");
+          // Nouveaux servants : on cherche tout de suite leurs annonces.
+          if (namesChanged && names.length > 0) void api.ventesDiscover().catch(() => undefined);
         },
         onError: (err) => toast.error(errorMessage(err)),
       },
@@ -377,6 +385,13 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                 }}
               />
             </Field>
+            <div className="grid grid-cols-3 gap-3">
+              {numberInput(
+                "salesTopRank",
+                "Rang visé",
+                "1 = la moins chère. Alerte et pastille quand une annonce sort de ce top.",
+              )}
+            </div>
           </Section>
 
           <Section title="Apparence">

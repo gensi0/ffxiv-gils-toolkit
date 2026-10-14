@@ -236,6 +236,35 @@ impl Universalis {
         parse_per_item(&body, ids)
     }
 
+    /// Toutes les annonces d'un serveur, réduites aux champs utiles pour
+    /// reconnaître les miennes. Non mis en cache : sert au relevé complet.
+    pub async fn listings_light(
+        &self,
+        world: &str,
+        ids: &[u32],
+    ) -> AppResult<HashMap<u32, MarketItem>> {
+        let prefix = if ids.len() == 1 { "" } else { "items." };
+        let fields = [
+            "itemID",
+            "lastUploadTime",
+            "listings.listingID",
+            "listings.retainerName",
+            "listings.pricePerUnit",
+            "listings.quantity",
+            "listings.hq",
+        ]
+        .iter()
+        .map(|f| format!("{prefix}{f}"))
+        .collect::<Vec<_>>()
+        .join(",");
+        let url = url(
+            &format!("/{world}/{}", ids_csv(ids)),
+            &[("entries", "0".to_string()), ("fields", fields)],
+        )?;
+        let body = self.net.get_text(&url).await?;
+        parse_per_item(&body, ids)
+    }
+
     /// Sales within the last `within` seconds, newest first.
     pub async fn history(
         &self,
