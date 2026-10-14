@@ -44,6 +44,8 @@ export interface Settings {
   theme: Theme;
   /** Noms de mes servants, pour reconnaître mes annonces. */
   retainerNames: string[];
+  /** Alerte quand une de mes annonces sort de ce rang. */
+  salesTopRank: number;
 }
 
 export interface AppInfo {
@@ -207,6 +209,12 @@ export interface MyListing {
   /** Prix concurrent le plus bas quand on est passé sous mon prix. */
   undercutPrice: number | null;
   suggestedPrice: number | null;
+  /** 1 = la moins chère parmi les autres vendeurs de même qualité. */
+  rank: number | null;
+  listingCount: number | null;
+  cheapestOther: number | null;
+  /** Coût moyen d'achat noté (liste de courses), si connu. */
+  unitCost: number | null;
 }
 
 export interface StockLine {
@@ -219,6 +227,10 @@ export interface StockLine {
 export interface VentesOverview {
   configured: boolean;
   lastPollMs: number | null;
+  lastDiscoveryMs: number | null;
+  discovering: boolean;
+  taxRate: number;
+  topRank: number;
   listings: MyListing[];
   pending: MyListing[];
   stock: StockLine[];
@@ -409,6 +421,7 @@ export const api = {
   listWorlds: () => invoke<World[]>("list_worlds"),
   ventesOverview: () => invoke<VentesOverview>("ventes_overview"),
   ventesRefresh: () => invoke<VentesOverview>("ventes_refresh"),
+  ventesDiscover: () => invoke<VentesOverview>("ventes_discover"),
   ventesSetPrice: (listingId: string, price: number) =>
     invoke<null>("ventes_set_price", { listingId, price }),
   ventesClose: (listingId: string, sold: boolean, price: number | null) =>

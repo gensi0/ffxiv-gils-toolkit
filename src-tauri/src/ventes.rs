@@ -12,7 +12,7 @@
 //! consommé dans l'ordre d'achat (FIFO).
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -37,6 +37,11 @@ const MATCH_SLACK_MS: i64 = 10 * 60 * 1000;
 const MARKET_MAX_AGE: Duration = Duration::from_secs(60);
 
 static LAST_POLL_MS: AtomicI64 = AtomicI64::new(0);
+static LAST_DISCOVERY_MS: AtomicI64 = AtomicI64::new(0);
+static DISCOVERING: AtomicBool = AtomicBool::new(false);
+/// Relevé complet du serveur (tous les objets) pour trouver toutes mes annonces.
+const DISCOVER_EVERY_MS: i64 = 30 * 60 * 1000;
+const DISCOVER_CHUNK: usize = 100;
 
 // ---------- logique pure (testée sans réseau) ----------
 
@@ -139,6 +144,12 @@ pub struct ListingView {
     pub expected_price: Option<i64>,
     pub undercut_price: Option<i64>,
     pub suggested_price: Option<i64>,
+    /// 1 = la moins chère parmi les autres vendeurs de même qualité.
+    pub rank: Option<i64>,
+    pub listing_count: Option<i64>,
+    pub cheapest_other: Option<i64>,
+    /// Coût moyen d'achat (stock de la liste de courses), si connu.
+    pub unit_cost: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -156,6 +167,13 @@ pub struct Overview {
     /// Faux tant qu'aucun nom de servant n'est renseigné.
     pub configured: bool,
     pub last_poll_ms: Option<i64>,
+    pub last_discovery_ms: Option<i64>,
+    /// Relevé complet du serveur en cours.
+    pub discovering: bool,
+    /// Taxe de vente appliquée (0.05 = 5 %).
+    pub tax_rate: f64,
+    /// Rang visé (paramètres).
+    pub top_rank: u32,
     pub listings: Vec<ListingView>,
     /// Annonces disparues sans vente correspondante : vendues ou retirées ?
     pub pending: Vec<ListingView>,
@@ -216,10 +234,14 @@ struct ListingRow {
     expected_price: Option<i64>,
     undercut_price: Option<i64>,
     undercut_notified_price: Option<i64>,
+    rank: Option<i64>,
+    listing_count: Option<i64>,
+    cheapest_other: Option<i64>,
 }
 
 const LISTING_COLUMNS: &str = "listing_id, item_id, hq, price, quantity, retainer, first_seen,
-    last_seen, status, expected_price, undercut_price, undercut_notified_price";
+    last_seen, status, expected_price, undercut_price, undercut_notified_price, rank,
+    listing_count, cheapest_other";
 
 impl ListingRow {
     fn known(&self) -> Known {
@@ -306,6 +328,125 @@ struct PollCtx {
     mine: Vec<String>,
     tax_rate: f64,
     notify: bool,
+    top_rank: u32,
+}
+
+/// Rang d'une annonce parmi les autres vendeurs (même qualité) : 1 + nombre
+/// d'annonces strictement moins chères, et nombre total d'annonces.
+pub fn rank(my_price: i64, others: &[i64]) -> (i64, i64) {
+    let below = others.iter().filter(|&&p| p < my_price).count() as i64;
+    (1 + below, others.len() as i64 + 1)
+}
+
+/// Enregistre mes annonces d'un relevé. Renvoie les identifiants vus et les
+/// nouvelles annonces (qualité, quantité).
+async fn upsert_mine(
+    db: &SqlitePool,
+    item_id: u32,
+    market: &MarketItem,
+    mine: &[String],
+    known_ids: &HashSet<&str>,
+) -> AppResult<(HashSet<String>, Vec<(bool, i64)>)> {
+    let upload = market.last_upload_time;
+    let mut seen = HashSet::new();
+    let mut fresh = Vec::new();
+    for l in &market.listings {
+        if !is_mine(l.retainer_name.as_deref(), mine) {
+            continue;
+        }
+        let Some(id) = l.listing_id.as_deref() else {
+            continue;
+        };
+        if !known_ids.contains(id) {
+            fresh.push((l.hq, i64::from(l.quantity)));
+        }
+        seen.insert(id.to_string());
+        sqlx::query(
+            "INSERT INTO my_listings
+               (listing_id, item_id, hq, price, quantity, retainer, first_seen, last_seen, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+             ON CONFLICT(listing_id) DO UPDATE SET
+               price = excluded.price,
+               quantity = excluded.quantity,
+               last_seen = MAX(my_listings.last_seen, excluded.last_seen),
+               status = 'active',
+               expected_price = CASE WHEN my_listings.expected_price = excluded.price
+                                     THEN NULL ELSE my_listings.expected_price END",
+        )
+        .bind(id)
+        .bind(i64::from(item_id))
+        .bind(l.hq)
+        .bind(l.price_per_unit as i64)
+        .bind(i64::from(l.quantity))
+        .bind(l.retainer_name.clone().unwrap_or_default())
+        .bind(upload)
+        .bind(upload)
+        .execute(db)
+        .await?;
+    }
+    Ok((seen, fresh))
+}
+
+/// Met à jour rang et concurrence de mes annonces actives d'un objet.
+/// `notify` à faux marque la situation actuelle comme déjà signalée (relevé
+/// complet : pas de rafale de notifications à la découverte).
+async fn update_ranks(
+    app: &AppHandle,
+    db: &SqlitePool,
+    ctx: &PollCtx,
+    item_id: u32,
+    market: &MarketItem,
+    notify: bool,
+) -> AppResult<()> {
+    let mut others: HashMap<bool, Vec<i64>> = HashMap::new();
+    for l in &market.listings {
+        if !is_mine(l.retainer_name.as_deref(), &ctx.mine) {
+            others
+                .entry(l.hq)
+                .or_default()
+                .push(l.price_per_unit as i64);
+        }
+    }
+    let active: Vec<ListingRow> = sqlx::query_as(&format!(
+        "SELECT {LISTING_COLUMNS} FROM my_listings WHERE item_id = ? AND status = 'active'"
+    ))
+    .bind(i64::from(item_id))
+    .fetch_all(db)
+    .await?;
+    for l in &active {
+        let mine = l.expected_price.unwrap_or(l.price);
+        let competitors = others.get(&l.hq).map(Vec::as_slice).unwrap_or_default();
+        let (r, total) = rank(mine, competitors);
+        let cheapest = competitors.iter().copied().min();
+        let undercut = cheapest.filter(|&c| c < mine);
+        sqlx::query(
+            "UPDATE my_listings SET undercut_price = ?, rank = ?, listing_count = ?, cheapest_other = ?
+             WHERE listing_id = ?",
+        )
+        .bind(undercut)
+        .bind(r)
+        .bind(total)
+        .bind(cheapest)
+        .bind(&l.listing_id)
+        .execute(db)
+        .await?;
+        let out_of_top = r > i64::from(ctx.top_rank);
+        if let (true, Some(c)) = (out_of_top, undercut) {
+            if l.undercut_notified_price != Some(c) {
+                if notify && ctx.notify {
+                    notify_undercut(app, item_id, l, c, r).await;
+                }
+                sqlx::query(
+                    "UPDATE my_listings SET undercut_notified_price = ? WHERE listing_id = ?",
+                )
+                .bind(c)
+                .bind(&l.listing_id)
+                .execute(db)
+                .await?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Applique un relevé Universalis d'un objet.
@@ -328,47 +469,7 @@ async fn process_item(
     .fetch_all(db)
     .await?;
     let known_ids: HashSet<&str> = known.iter().map(|k| k.listing_id.as_str()).collect();
-
-    let mut seen: HashSet<String> = HashSet::new();
-    let mut fresh: Vec<(bool, i64)> = Vec::new();
-    let mut competitor: HashMap<bool, i64> = HashMap::new();
-    for l in &market.listings {
-        let price = l.price_per_unit as i64;
-        if !is_mine(l.retainer_name.as_deref(), &ctx.mine) {
-            let e = competitor.entry(l.hq).or_insert(price);
-            *e = (*e).min(price);
-            continue;
-        }
-        let Some(id) = l.listing_id.as_deref() else {
-            continue;
-        };
-        if !known_ids.contains(id) {
-            fresh.push((l.hq, i64::from(l.quantity)));
-        }
-        seen.insert(id.to_string());
-        sqlx::query(
-            "INSERT INTO my_listings
-               (listing_id, item_id, hq, price, quantity, retainer, first_seen, last_seen, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
-             ON CONFLICT(listing_id) DO UPDATE SET
-               price = excluded.price,
-               quantity = excluded.quantity,
-               last_seen = excluded.last_seen,
-               status = 'active',
-               expected_price = CASE WHEN my_listings.expected_price = excluded.price
-                                     THEN NULL ELSE my_listings.expected_price END",
-        )
-        .bind(id)
-        .bind(i64::from(item_id))
-        .bind(l.hq)
-        .bind(price)
-        .bind(i64::from(l.quantity))
-        .bind(l.retainer_name.clone().unwrap_or_default())
-        .bind(upload)
-        .bind(upload)
-        .execute(db)
-        .await?;
-    }
+    let (seen, mut fresh) = upsert_mine(db, item_id, market, &ctx.mine, &known_ids).await?;
 
     // Annonces disparues d'un relevé plus récent que leur dernière apparition.
     let used_rows: Vec<(i64, i64, i64)> =
@@ -416,35 +517,7 @@ async fn process_item(
         close(db, &k.listing_id, status, upload).await?;
     }
 
-    // Concurrence : prix le plus bas des autres vendeurs, même qualité.
-    let active: Vec<ListingRow> = sqlx::query_as(&format!(
-        "SELECT {LISTING_COLUMNS} FROM my_listings WHERE item_id = ? AND status = 'active'"
-    ))
-    .bind(i64::from(item_id))
-    .fetch_all(db)
-    .await?;
-    for l in &active {
-        let mine = l.expected_price.unwrap_or(l.price);
-        let undercut = competitor.get(&l.hq).copied().filter(|&c| c < mine);
-        sqlx::query("UPDATE my_listings SET undercut_price = ? WHERE listing_id = ?")
-            .bind(undercut)
-            .bind(&l.listing_id)
-            .execute(db)
-            .await?;
-        if let Some(c) = undercut {
-            if ctx.notify && l.undercut_notified_price != Some(c) {
-                notify_undercut(app, item_id, l, c).await;
-                sqlx::query(
-                    "UPDATE my_listings SET undercut_notified_price = ? WHERE listing_id = ?",
-                )
-                .bind(c)
-                .bind(&l.listing_id)
-                .execute(db)
-                .await?;
-            }
-        }
-    }
-    Ok(())
+    update_ranks(app, db, ctx, item_id, market, true).await
 }
 
 async fn close(db: &SqlitePool, listing_id: &str, status: &str, at: i64) -> AppResult<()> {
@@ -457,7 +530,13 @@ async fn close(db: &SqlitePool, listing_id: &str, status: &str, at: i64) -> AppR
     Ok(())
 }
 
-async fn notify_undercut(app: &AppHandle, item_id: u32, l: &ListingRow, competitor: i64) {
+async fn notify_undercut(
+    app: &AppHandle,
+    item_id: u32,
+    l: &ListingRow,
+    competitor: i64,
+    rank: i64,
+) {
     let state = app.state::<AppState>();
     let lang = settings::load(&state.db)
         .await
@@ -468,7 +547,7 @@ async fn notify_undercut(app: &AppHandle, item_id: u32, l: &ListingRow, competit
         .get(&item_id)
         .map_or_else(|| format!("Objet n°{item_id}"), |i| i.name.clone());
     let body = format!(
-        "Quelqu'un vend à {competitor} gils, sous ton prix de {} ({}). Prix conseillé : {}.",
+        "Tu es {rank}e : quelqu'un vend à {competitor} gils, sous ton prix de {} ({}). Prix conseillé : {}.",
         l.expected_price.unwrap_or(l.price),
         l.retainer,
         suggested_price(competitor)
@@ -499,6 +578,7 @@ pub async fn poll(app: &AppHandle) -> AppResult<()> {
         mine,
         tax_rate: scan::seller_tax(&state.universalis, &scope, &settings).await,
         notify: settings.notifications_enabled,
+        top_rank: settings.sales_top_rank,
     };
     let home = scope.home.name.clone();
     for chunk in ids.chunks(100) {
@@ -530,9 +610,94 @@ pub async fn poll(app: &AppHandle) -> AppResult<()> {
     Ok(())
 }
 
-/// Boucle de fond : un relevé toutes les 3 minutes.
+/// Remet le drapeau de relevé complet à faux, même en cas d'erreur.
+struct DiscoveryGuard;
+impl Drop for DiscoveryGuard {
+    fn drop(&mut self) {
+        DISCOVERING.store(false, Ordering::Relaxed);
+    }
+}
+
+/// Relevé complet : lit toutes les annonces du serveur principal (environ
+/// 170 requêtes) et enregistre les miennes, qui passent ensuite dans le suivi
+/// toutes les 3 minutes. Renvoie le nombre d'annonces trouvées.
+pub async fn discover(app: &AppHandle) -> AppResult<usize> {
+    if DISCOVERING.swap(true, Ordering::Relaxed) {
+        return Err(AppError::Invalid("recherche déjà en cours".into()));
+    }
+    let guard = DiscoveryGuard;
+    let _ = app.emit(EVENT_VENTES_UPDATE, ());
+    let state = app.state::<AppState>();
+    let settings: Settings = settings::load(&state.db).await?;
+    let mine = normalize_names(&settings.retainer_names);
+    if mine.is_empty() {
+        return Ok(0);
+    }
+    let worlds = worlds::load(&state.db).await?;
+    let scope = scope::build(&settings, &worlds)?;
+    let ctx = PollCtx {
+        mine,
+        tax_rate: 0.0,
+        notify: false,
+        top_rank: settings.sales_top_rank,
+    };
+    let home = scope.home.name.clone();
+    let ids = state.universalis.marketable().await?;
+    let mut found = 0;
+    let mut tasks = tokio::task::JoinSet::new();
+    for chunk in ids.chunks(DISCOVER_CHUNK) {
+        let api = state.universalis.clone();
+        let home = home.clone();
+        let chunk = chunk.to_vec();
+        tasks.spawn(async move { api.listings_light(&home, &chunk).await });
+    }
+    let mut failed = 0;
+    while let Some(res) = tasks.join_next().await {
+        let Ok(Ok(markets)) = res else {
+            failed += 1;
+            continue;
+        };
+        for (&item_id, market) in &markets {
+            if !market
+                .listings
+                .iter()
+                .any(|l| is_mine(l.retainer_name.as_deref(), &ctx.mine))
+            {
+                continue;
+            }
+            let known: Vec<(String,)> = sqlx::query_as(
+                "SELECT listing_id FROM my_listings WHERE item_id = ? AND status = 'active'",
+            )
+            .bind(i64::from(item_id))
+            .fetch_all(&state.db)
+            .await?;
+            let known_ids: HashSet<&str> = known.iter().map(|k| k.0.as_str()).collect();
+            let (seen, _) = upsert_mine(&state.db, item_id, market, &ctx.mine, &known_ids).await?;
+            found += seen.len();
+            update_ranks(app, &state.db, &ctx, item_id, market, false).await?;
+        }
+    }
+    if failed > 0 {
+        tracing::warn!(failed, "relevé complet : requêtes échouées");
+    }
+    LAST_DISCOVERY_MS.store(now_ms(), Ordering::Relaxed);
+    drop(guard);
+    let _ = app.emit(EVENT_VENTES_UPDATE, ());
+    Ok(found)
+}
+
+/// Boucle de fond : un relevé toutes les 3 minutes, un relevé complet toutes
+/// les 30 minutes.
 pub async fn run(app: AppHandle) {
     loop {
+        if now_ms() - LAST_DISCOVERY_MS.load(Ordering::Relaxed) >= DISCOVER_EVERY_MS
+            && !DISCOVERING.load(Ordering::Relaxed)
+        {
+            match discover(&app).await {
+                Ok(n) => tracing::info!(found = n, "relevé complet de mes annonces"),
+                Err(e) => tracing::warn!(error = %e, "relevé complet échoué"),
+            }
+        }
         if let Err(e) = poll(&app).await {
             tracing::warn!(error = %e, "suivi des ventes : relevé échoué");
         }
@@ -571,8 +736,20 @@ fn item_of(map: &HashMap<u32, ItemInfo>, id: i64) -> ItemInfo {
         .unwrap_or_else(|| fallback_item(id as u32))
 }
 
-fn listing_view(r: ListingRow, map: &HashMap<u32, ItemInfo>) -> ListingView {
+fn listing_view(
+    r: ListingRow,
+    map: &HashMap<u32, ItemInfo>,
+    costs: &HashMap<(i64, bool), f64>,
+) -> ListingView {
+    let unit_cost = costs
+        .get(&(r.item_id, r.hq))
+        .or_else(|| costs.get(&(r.item_id, !r.hq)))
+        .copied();
     ListingView {
+        unit_cost,
+        rank: r.rank,
+        listing_count: r.listing_count,
+        cheapest_other: r.cheapest_other,
         item: item_of(map, r.item_id),
         suggested_price: r.undercut_price.map(suggested_price),
         listing_id: r.listing_id,
@@ -617,14 +794,26 @@ pub async fn overview(state: &AppState) -> AppResult<Overview> {
     let (pending, listings): (Vec<ListingRow>, Vec<ListingRow>) =
         rows.into_iter().partition(|r| r.status == "pending");
     let last = LAST_POLL_MS.load(Ordering::Relaxed);
+    let last_discovery = LAST_DISCOVERY_MS.load(Ordering::Relaxed);
+    let costs: HashMap<(i64, bool), f64> = stock
+        .iter()
+        .map(|&(id, hq, _, avg)| ((id, hq), avg))
+        .collect();
     Ok(Overview {
         configured: !normalize_names(&settings.retainer_names).is_empty(),
         last_poll_ms: (last > 0).then_some(last),
+        last_discovery_ms: (last_discovery > 0).then_some(last_discovery),
+        discovering: DISCOVERING.load(Ordering::Relaxed),
+        tax_rate: current_tax(state).await,
+        top_rank: settings.sales_top_rank,
         listings: listings
             .into_iter()
-            .map(|r| listing_view(r, &map))
+            .map(|r| listing_view(r, &map, &costs))
             .collect(),
-        pending: pending.into_iter().map(|r| listing_view(r, &map)).collect(),
+        pending: pending
+            .into_iter()
+            .map(|r| listing_view(r, &map, &costs))
+            .collect(),
         stock: stock
             .into_iter()
             .map(|(id, hq, remaining, avg)| StockView {
@@ -928,6 +1117,17 @@ mod tests {
         assert_eq!(updates, vec![(1, 0), (2, 4)]);
         let (_, units, _) = fifo(&lots, 20);
         assert_eq!(units, 8, "seules 8 unités sont en stock");
+    }
+
+    #[test]
+    fn rank_counts_strictly_cheaper_competitors() {
+        assert_eq!(rank(500, &[]), (1, 1));
+        assert_eq!(
+            rank(500, &[400, 500, 600]),
+            (2, 4),
+            "égalité : pas devant moi"
+        );
+        assert_eq!(rank(500, &[100, 200, 300]), (4, 4));
     }
 
     #[test]

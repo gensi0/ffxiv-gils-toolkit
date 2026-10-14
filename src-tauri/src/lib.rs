@@ -218,6 +218,7 @@ pub fn run() {
             commands::market_stats,
             commands::ventes_overview,
             commands::ventes_refresh,
+            commands::ventes_discover,
             commands::ventes_set_price,
             commands::ventes_close,
             commands::ventes_track,
