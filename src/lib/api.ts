@@ -46,6 +46,10 @@ export interface Settings {
   retainerNames: string[];
   /** Alerte quand une de mes annonces sort de ce rang. */
   salesTopRank: number;
+  /** Niveaux des métiers d'artisan, ordre de CRAFT_JOBS ; vide = non renseignés. */
+  crafterLevels: number[];
+  /** Lien ou identifiant Lodestone. */
+  lodestone: string;
 }
 
 export interface AppInfo {
@@ -190,6 +194,71 @@ export interface ScanRun {
 }
 
 /** Annonce à acheter : prix unitaire affiché (hors taxe) et quantité. */
+// ---------- artisanat ----------
+
+/** Métiers d'artisan, dans l'ordre du jeu et du Lodestone. */
+export const CRAFT_JOBS = [
+  "Menuisier",
+  "Forgeron",
+  "Armurier",
+  "Orfèvre",
+  "Tanneur",
+  "Couturier",
+  "Alchimiste",
+  "Cuisinier",
+] as const;
+
+export type CraftSource =
+  | { kind: "buy"; world: string; worldId: number; dc: string }
+  | { kind: "craft"; recipeId: number; job: number; level: number }
+  | { kind: "missing" };
+
+export interface CraftNode {
+  item: number;
+  quantity: number;
+  unitCost: number;
+  source: CraftSource;
+  children: CraftNode[];
+}
+
+export interface CraftRow {
+  recipeId: number;
+  item: ItemInfo;
+  job: number;
+  level: number;
+  amount: number;
+  specialist: boolean;
+  masterBook: boolean;
+  expert: boolean;
+  sellPrice: number;
+  unitsPerDay: number;
+  unitCost: number;
+  unitProfit: number;
+  margin: number;
+  profitPerDay: number;
+  suggestedCrafts: number;
+  tree: CraftNode;
+}
+
+export interface CraftResults {
+  computedAtMs: number;
+  taxRate: number;
+  recipesConsidered: number;
+  rows: CraftRow[];
+  items: Record<string, ItemInfo>;
+}
+
+export interface CraftOptions {
+  allowExpert: boolean;
+  allowMaster: boolean;
+  includeSpecialist: boolean;
+}
+
+export interface LodestoneJobs {
+  character: string;
+  levels: number[];
+}
+
 // ---------- mes ventes et journal ----------
 
 export type ListingStatus = "active" | "pending" | "sold" | "removed";
@@ -415,10 +484,14 @@ export const EVENTS = {
   watchUpdate: "watch-update",
   wsStatus: "ws-status",
   ventesUpdate: "ventes-update",
+  craftProgress: "craft-progress",
 } as const;
 
 export const api = {
   listWorlds: () => invoke<World[]>("list_worlds"),
+  craftAnalyze: (options: CraftOptions) => invoke<CraftResults>("craft_analyze", { options }),
+  craftLast: () => invoke<CraftResults | null>("craft_last"),
+  craftLodestone: (input: string) => invoke<LodestoneJobs>("craft_lodestone", { input }),
   ventesOverview: () => invoke<VentesOverview>("ventes_overview"),
   ventesRefresh: () => invoke<VentesOverview>("ventes_refresh"),
   ventesDiscover: () => invoke<VentesOverview>("ventes_discover"),

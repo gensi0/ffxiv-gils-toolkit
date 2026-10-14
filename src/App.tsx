@@ -13,6 +13,7 @@ import { ScanPage } from "@/pages/ScanPage";
 import { SearchPage } from "@/pages/SearchPage";
 import { ShoppingListPage } from "@/pages/ShoppingListPage";
 import { JournalPage } from "@/pages/JournalPage";
+import { CraftPage } from "@/pages/CraftPage";
 import { VentesPage } from "@/pages/VentesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { StatsPage } from "@/pages/StatsPage";
@@ -32,6 +33,7 @@ const PAGES: Record<Page, React.ComponentType> = {
   courses: ShoppingListPage,
   ventes: VentesPage,
   journal: JournalPage,
+  artisanat: CraftPage,
   stats: StatsPage,
   settings: SettingsPage,
   item: ItemPage,

@@ -82,6 +82,10 @@ pub struct Settings {
     pub retainer_names: Vec<String>,
     /// Alerte quand une de mes annonces sort de ce rang (1 = la moins chère).
     pub sales_top_rank: u32,
+    /// Niveaux des métiers d'artisan (ordre de `CraftType`) ; vide = non renseignés.
+    pub crafter_levels: Vec<u32>,
+    /// Lien ou identifiant Lodestone, pour réimporter les niveaux.
+    pub lodestone: String,
 }
 
 impl Default for Settings {
@@ -105,6 +109,8 @@ impl Default for Settings {
             theme: Theme::Dark,
             retainer_names: Vec::new(),
             sales_top_rank: 1,
+            crafter_levels: Vec::new(),
+            lodestone: String::new(),
         }
     }
 }
@@ -143,6 +149,9 @@ impl Settings {
         }
         if !(1..=2000).contains(&self.drill_down_top_n) {
             return invalid("drill-down size must be between 1 and 2000".into());
+        }
+        if self.crafter_levels.len() > 8 || self.crafter_levels.iter().any(|&l| l > 100) {
+            return invalid("niveaux d'artisan invalides".into());
         }
         if !(1..=50).contains(&self.sales_top_rank) {
             return invalid("le rang visé doit être entre 1 et 50".into());

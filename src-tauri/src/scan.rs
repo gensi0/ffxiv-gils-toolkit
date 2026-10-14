@@ -260,7 +260,7 @@ async fn or_cancel<T>(
 }
 
 /// Home-world anchor from the aggregated response (world level).
-fn home_estimate(q: &AggQuality) -> (f64, f64) {
+pub(crate) fn home_estimate(q: &AggQuality) -> (f64, f64) {
     let sell = q
         .average_sale_price
         .world
@@ -282,7 +282,7 @@ fn quality_of(item: &AggItem, q: Quality) -> &AggQuality {
     }
 }
 
-fn upload_of(item: &AggItem, world_id: i64) -> Option<i64> {
+pub(crate) fn upload_of(item: &AggItem, world_id: i64) -> Option<i64> {
     item.world_upload_times
         .iter()
         .find(|u| u.world_id == world_id)

@@ -14,6 +14,10 @@ compris.
 - **Liste de courses** : opportunités choisies dans un scan, regroupées par centre
   de données et serveur, avec budget, bénéfice attendu et cases « acheté » (le prix
   réellement payé est noté dans le journal).
+- **Artisanat** : ce que tu sais fabriquer (niveaux importés du Lodestone) et qui
+  rapporte, avec composants achetés ou fabriqués au moins cher dans tes régions,
+  bénéfice par unité et par jour, arbre de fabrication et ajout des ingrédients à
+  la liste de courses, regroupés par serveur.
 - **Mes ventes** : toutes les annonces de tes servants, retrouvées en parcourant le
   marché de ton serveur (reconnues par leur nom), avec ton rang face à la
   concurrence, l'écart avec le moins cher, l'étiquette « Acheté » et ta marge pour

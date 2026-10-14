@@ -1,5 +1,6 @@
 mod analysis;
 mod commands;
+mod craft;
 mod db;
 mod detail;
 mod error;
@@ -173,6 +174,7 @@ pub fn run() {
                 .build()?;
 
             let data_dir_for_spender = data_dir.join("donnees-jeu.json");
+            let data_dir_recipes = data_dir.join("recettes.json");
             let (watch, watch_rx) = watch::WatchManager::new();
             app.manage(AppState {
                 universalis: universalis::Universalis::new(
@@ -188,6 +190,7 @@ pub fn run() {
                 _log_guard: log_guard,
             });
             app.manage(spender::SpenderState::new(data_dir_for_spender));
+            app.manage(craft::CraftState::new(data_dir_recipes));
             spawn_background(app.handle(), http);
             tauri::async_runtime::spawn(watch::run(app.handle().clone(), watch_rx));
             tauri::async_runtime::spawn(ventes::run(app.handle().clone()));
@@ -216,6 +219,9 @@ pub fn run() {
             commands::watchlist_set_threshold,
             commands::ws_status,
             commands::market_stats,
+            craft::craft_analyze,
+            craft::craft_last,
+            craft::craft_lodestone,
             commands::ventes_overview,
             commands::ventes_refresh,
             commands::ventes_discover,

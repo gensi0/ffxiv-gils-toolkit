@@ -27,6 +27,22 @@ export interface ShoppingItem {
   bought: boolean;
   /** Achat noté dans le journal des gains. */
   purchaseId?: number;
+  /** Ingrédient d'artisanat : objets à fabriquer qui l'utilisent. */
+  forCraft?: string[];
+}
+
+/** Ingrédient à acheter pour une fabrication. */
+export interface CraftIngredient {
+  itemId: number;
+  name: string;
+  iconPath: string | null;
+  worldId: number;
+  world: string;
+  dc: string;
+  crossRegion: boolean;
+  /** Prix unitaire taxe d'achat comprise. */
+  unitCost: number;
+  units: number;
 }
 
 export const shoppingKey = (o: Opportunity) =>
@@ -59,6 +75,7 @@ function fromOpportunity(o: Opportunity): ShoppingItem {
 interface ShoppingState {
   items: ShoppingItem[];
   add: (opps: Opportunity[]) => void;
+  addIngredients: (craft: string, list: CraftIngredient[]) => void;
   remove: (key: string) => void;
   toggle: (o: Opportunity) => void;
   setBought: (key: string, bought: boolean, purchaseId?: number) => void;
@@ -75,6 +92,48 @@ export const useShoppingList = create<ShoppingState>()(
         const have = new Set(get().items.map((i) => i.key));
         const fresh = opps.filter((o) => !have.has(shoppingKey(o))).map(fromOpportunity);
         set({ items: [...get().items, ...fresh] });
+      },
+      addIngredients: (craft, list) => {
+        const items = [...get().items];
+        for (const g of list) {
+          const key = `${String(g.itemId)}-NQ-${String(g.worldId)}`;
+          const i = items.findIndex((x) => x.key === key && !x.bought);
+          const prev = items[i];
+          if (prev) {
+            const units = prev.units + g.units;
+            items[i] = {
+              ...prev,
+              units,
+              cost: prev.cost + g.units * g.unitCost,
+              forCraft: [...new Set([...(prev.forCraft ?? []), craft])],
+            };
+            continue;
+          }
+          if (items.some((x) => x.key === key)) continue;
+          items.push({
+            key,
+            itemId: g.itemId,
+            name: g.name,
+            iconPath: g.iconPath,
+            quality: "NQ",
+            soldAs: "NQ",
+            worldId: g.worldId,
+            world: g.world,
+            dc: g.dc,
+            crossRegion: g.crossRegion,
+            unitPrice: g.unitCost / 1.05,
+            maxUnitPrice: null,
+            lots: [],
+            units: g.units,
+            cost: g.units * g.unitCost,
+            sellPrice: 0,
+            profit: 0,
+            addedAt: Date.now(),
+            bought: false,
+            forCraft: [craft],
+          });
+        }
+        set({ items });
       },
       remove: (key) => {
         set({ items: get().items.filter((i) => i.key !== key) });
