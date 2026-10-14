@@ -28,6 +28,27 @@ impl Http {
         Self { client }
     }
 
+    /// Corps texte (pages HTML), avec les mêmes réessais.
+    pub async fn get_text(&self, url: &str) -> Result<String> {
+        let mut delay = Duration::from_millis(500);
+        for attempt in 0..3 {
+            match self.client.get(url).send().await {
+                Ok(resp) if resp.status().is_success() => return Ok(resp.text().await?),
+                Ok(resp) if resp.status().as_u16() == 404 => {
+                    return Err(Error::Api("page introuvable (404)".into()))
+                }
+                Ok(resp) if attempt == 2 => {
+                    return Err(Error::Api(format!("{} sur {url}", resp.status())))
+                }
+                Err(e) if attempt == 2 => return Err(e.into()),
+                _ => {}
+            }
+            tokio::time::sleep(delay).await;
+            delay *= 2;
+        }
+        unreachable!("la boucle retourne toujours")
+    }
+
     pub async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
         let mut delay = Duration::from_millis(500);
         for attempt in 0..5 {

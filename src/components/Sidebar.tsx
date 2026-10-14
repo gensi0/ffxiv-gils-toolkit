@@ -10,6 +10,7 @@ import {
   SettingsIcon,
   ShoppingCartIcon,
   TagIcon,
+  AnvilIcon,
   NotebookPenIcon,
   StarIcon,
   StoreIcon,
@@ -32,6 +33,7 @@ const SECTIONS: { title: string; items: Item[] }[] = [
     items: [
       { page: "dashboard", label: "Tableau de bord", icon: LayoutDashboardIcon },
       { page: "scan", label: "Scan", icon: RadarIcon },
+      { page: "artisanat", label: "Artisanat", icon: AnvilIcon },
       { page: "watchlist", label: "Suivi", icon: StarIcon },
       { page: "courses", label: "Liste de courses", icon: ShoppingCartIcon },
       { page: "ventes", label: "Mes ventes", icon: TagIcon },

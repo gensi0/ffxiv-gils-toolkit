@@ -3,7 +3,7 @@ members = [".", "core"]
 
 [package]
 name = "ffxiv-trader"
-version = "0.5.0"
+version = "0.6.0"
 description = "FFXIV Gils Toolkit : arbitrage et dépense de monnaies à l'hôtel des ventes"
 authors = ["g3nsi"]
 edition = "2021"

@@ -6,6 +6,7 @@
 //! - [`universalis`] : prix et vitesse de vente par serveur.
 //! - [`pricing`] : rentabilité en gils par unité de monnaie.
 
+pub mod craft;
 pub mod dataset;
 pub mod error;
 pub mod http;

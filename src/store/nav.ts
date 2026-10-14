@@ -8,6 +8,7 @@ export type Page =
   | "courses"
   | "ventes"
   | "journal"
+  | "artisanat"
   | "stats"
   | "settings"
   | "item"

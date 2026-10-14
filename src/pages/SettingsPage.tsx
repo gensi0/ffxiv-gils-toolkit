@@ -19,6 +19,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { PageHeader } from "@/components/Page";
 import {
   api,
+  CRAFT_JOBS,
   errorMessage,
   LANGUAGES,
   RETAINER_CITIES,
@@ -125,6 +126,24 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
   }));
   const [notificationsEnabled, setNotificationsEnabled] = useState(initial.notificationsEnabled);
   const [retainerNames, setRetainerNames] = useState(initial.retainerNames.join(", "));
+  const [lodestone, setLodestone] = useState(initial.lodestone);
+  const [crafterLevels, setCrafterLevels] = useState<string[]>(() =>
+    CRAFT_JOBS.map((_, i) => (initial.crafterLevels[i] ? String(initial.crafterLevels[i]) : "")),
+  );
+  const [importing, setImporting] = useState(false);
+  const importLodestone = () => {
+    setImporting(true);
+    api
+      .craftLodestone(lodestone)
+      .then((j) => {
+        setCrafterLevels(j.levels.map((l) => (l > 0 ? String(l) : "")));
+        toast.success(`Niveaux de ${j.character} importés : pense à enregistrer.`);
+      })
+      .catch((e: unknown) => toast.error(errorMessage(e)))
+      .finally(() => {
+        setImporting(false);
+      });
+  };
 
   const grouped = useMemo(() => groupWorlds(worlds), [worlds]);
   const home = worlds.find((w) => w.id === homeWorldId);
@@ -173,6 +192,10 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
         salesTopRank: n("salesTopRank"),
         theme,
         retainerNames: names,
+        lodestone: lodestone.trim(),
+        crafterLevels: crafterLevels.some((l) => l.trim() !== "")
+          ? crafterLevels.map((l) => Math.min(100, Math.max(0, Number.parseInt(l, 10) || 0)))
+          : [],
       },
       {
         onSuccess: () => {
@@ -391,6 +414,49 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                 "Rang visé",
                 "1 = la moins chère. Alerte et pastille quand une annonce sort de ce top.",
               )}
+            </div>
+          </Section>
+
+          <Section title="Artisanat">
+            <Field
+              label="Lodestone"
+              htmlFor="lodestone"
+              hint="Lien de ta fiche personnage (ou son numéro) pour importer les niveaux de tes métiers d'artisan. Le Lodestone se met à jour avec un peu de retard."
+            >
+              <div className="flex gap-2">
+                <Input
+                  id="lodestone"
+                  placeholder="https://fr.finalfantasyxiv.com/lodestone/character/…"
+                  value={lodestone}
+                  onChange={(e) => {
+                    setLodestone(e.target.value);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={importing || lodestone.trim() === ""}
+                  onClick={importLodestone}
+                >
+                  {importing ? "Import…" : "Importer"}
+                </Button>
+              </div>
+            </Field>
+            <div className="grid grid-cols-4 gap-3">
+              {CRAFT_JOBS.map((job, i) => (
+                <Field key={job} label={job} htmlFor={`craft-${String(i)}`}>
+                  <Input
+                    id={`craft-${String(i)}`}
+                    inputMode="numeric"
+                    placeholder="—"
+                    value={crafterLevels[i]}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCrafterLevels((l) => l.map((x, j) => (j === i ? v : x)));
+                    }}
+                  />
+                </Field>
+              ))}
             </div>
           </Section>
 

@@ -227,10 +227,22 @@ function WorldCard({ g }: { g: WorldGroup }) {
                     </span>
                   )}
                 </td>
-                <td className="px-2 text-right text-muted-foreground tabular-nums">
-                  revente {gil(i.sellPrice)}
-                </td>
-                <td className="px-2 text-right text-emerald-500 tabular-nums">+{gil(i.profit)}</td>
+                {i.forCraft ? (
+                  <td colSpan={2} className="px-2 text-right text-muted-foreground">
+                    <span className="block max-w-56 truncate" title={i.forCraft.join(", ")}>
+                      pour fabriquer {i.forCraft.join(", ")}
+                    </span>
+                  </td>
+                ) : (
+                  <>
+                    <td className="px-2 text-right text-muted-foreground tabular-nums">
+                      revente {gil(i.sellPrice)}
+                    </td>
+                    <td className="px-2 text-right text-emerald-500 tabular-nums">
+                      +{gil(i.profit)}
+                    </td>
+                  </>
+                )}
                 <td className="w-8 pr-2">
                   <button
                     type="button"
