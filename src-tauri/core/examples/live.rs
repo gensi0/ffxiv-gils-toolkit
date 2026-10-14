@@ -67,7 +67,10 @@ async fn main() -> spender_core::Result<()> {
         "\nRevente PNJ sur {world} ({} objets) :",
         ds.gil_offers.len()
     );
-    for r in pricing::price_gil_offers(&ds, &gm).iter().take(10) {
+    for r in pricing::price_gil_offers(&ds, &gm, pricing::MARKET_TAX)
+        .iter()
+        .take(10)
+    {
         println!(
             "  {:>9} gils/j · {:<40} PNJ {:>6} → HV {:>8} · {:>5.1}/j · {}",
             r.daily_profit.map_or("—".into(), |g| format!("{g:.0}")),
@@ -92,7 +95,7 @@ async fn main() -> spender_core::Result<()> {
         .map(|o| o.item)
         .collect();
     let sm = uni.markets(&world, &seal_ids).await?;
-    let value = pricing::currency_value(&ds, seal, &sm);
+    let value = pricing::currency_value(&ds, seal, &sm, pricing::MARKET_TAX);
     println!("référence : {value:?}");
     let value = value.map(|v| v.gil);
     let del_ids: Vec<u32> = ds.deliveries.iter().map(|d| d.item).collect();
@@ -143,7 +146,7 @@ async fn main() -> spender_core::Result<()> {
     d_ids.sort_unstable();
     d_ids.dedup();
     let dm = uni.markets(&world, &d_ids).await?;
-    let des = pricing::price_desynths(&ds, &dm);
+    let des = pricing::price_desynths(&ds, &dm, pricing::MARKET_TAX);
     println!("\nDésynthèse ({} objets) :", des.len());
     for d in des
         .iter()

@@ -401,6 +401,7 @@ async fn run(
     rep.emit(Phase::Preparing, None);
 
     let seller_tax = seller_tax(api, &scope, &settings).await;
+    let mine = crate::ventes::normalize_names(&settings.retainer_names);
     let ids = match mode {
         Mode::Full => or_cancel(cancel, api.marketable()).await??,
         Mode::Retry(ids) => ids.clone(),
@@ -585,7 +586,8 @@ async fn run(
         let (Some(hm), Some(hh)) = (home_market.get(&item_id), home_history.get(&item_id)) else {
             continue;
         };
-        let home_listings = analysis::listings_by_world(hm, Some(scope.home.id))
+        let hm = analysis::without_mine(hm, &mine);
+        let home_listings = analysis::listings_by_world(&hm, Some(scope.home.id))
             .remove(&scope.home.id)
             .unwrap_or_default();
         let home_sales = analysis::sales_of(hh);

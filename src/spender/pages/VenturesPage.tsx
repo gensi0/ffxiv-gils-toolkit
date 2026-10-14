@@ -26,12 +26,11 @@ import {
   type VentureClassInfo,
 } from "@/spender/api";
 import { ago, decimal, gil } from "@/lib/format";
-import { useRefresh, useVentures, venturesKey } from "@/spender/queries";
+import { useRefresh, useSellerTax, useVentures, venturesKey } from "@/spender/queries";
 import { columnHelper } from "@/lib/table";
 import { useSpenderWorld } from "@/spender/world";
 import { usePrefs, type Retainer } from "@/spender/prefs";
 
-const TAX = 0.05;
 const MIN_SALES_PER_DAY = 1;
 
 /** Mission chiffrée pour le servant renseigné. */
@@ -43,7 +42,7 @@ interface Row extends PricedVenture {
   gilPerVenture: number | null;
 }
 
-function evaluate(v: PricedVenture, r: Retainer): Row {
+function evaluate(v: PricedVenture, r: Retainer, tax: number): Row {
   const tier = 1 + v.thresholds.filter((t) => t > 0 && r.stat >= t).length;
   const quantity = v.quantities[tier - 1] ?? v.quantities[0] ?? 0;
   // Combat : le niveau d'objet sert aux deux. Récolteurs : l'accès dépend de la
@@ -54,7 +53,7 @@ function evaluate(v: PricedVenture, r: Retainer): Row {
     available: r.level >= v.retainerLevel && access >= v.requiredStat,
     tier,
     quantity,
-    gilPerVenture: v.unitPrice == null ? null : v.unitPrice * quantity * (1 - TAX),
+    gilPerVenture: v.unitPrice == null ? null : v.unitPrice * quantity * (1 - tax),
   };
 }
 
@@ -149,7 +148,7 @@ function columns(info: VentureClassInfo) {
       header: () => (
         <Hint
           label="Gils / mission"
-          hint="Prix HV × quantité, taxe de 5 % déduite. Une mission dure 1 h et coûte 1 jeton de mission."
+          hint="Prix HV × quantité, taxe de vente de la semaine déduite. Une mission dure 1 h et coûte 1 jeton de mission."
         />
       ),
       cell: (cell) => <span className="font-medium">{gil(cell.row.original.gilPerVenture)}</span>,
@@ -173,6 +172,7 @@ export function VenturesPage() {
   const prefs = usePrefs();
   const world = useSpenderWorld();
   const data = useVentures(world);
+  const tax = useSellerTax(world);
   const refresh = useRefresh(venturesKey(world), () => spenderApi.ventures(world, true));
   const info: VentureClassInfo =
     VENTURE_CLASSES.find((c) => c.id === prefs.ventureClass) ?? DEFAULT_CLASS;
@@ -183,11 +183,11 @@ export function VenturesPage() {
     () =>
       (data.data ?? [])
         .filter((v) => v.class === prefs.ventureClass)
-        .map((v) => evaluate(v, retainer))
+        .map((v) => evaluate(v, retainer, tax))
         .filter(
           (v) => v.available && (!prefs.hideSlow || (v.dailyVelocity ?? 0) >= MIN_SALES_PER_DAY),
         ),
-    [data.data, prefs.ventureClass, retainer, prefs.hideSlow],
+    [data.data, prefs.ventureClass, retainer, prefs.hideSlow, tax],
   );
 
   const setNumber = (key: keyof Retainer) => (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -8,18 +8,22 @@ use std::sync::Arc;
 
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use spender_core::craft::{self, BuyPrice, Costing, LodestoneJobs, Node, Recipe};
+use spender_core::craft::{
+    self, BuyPrice, Costing, Gatherable, LodestoneJobs, Node, Origin, Recipe, Source,
+};
 use spender_core::http::Http;
 use spender_core::xivapi::XivApi as CoreXivApi;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
 use crate::error::{AppError, AppResult};
+use crate::net::CachePolicy;
 use crate::net::{now_ms, MAX_IN_FLIGHT};
 use crate::results::item_infos;
 use crate::scan::{home_estimate, seller_tax, upload_of};
 use crate::settings::{self, Settings};
-use crate::universalis::{AggItem, AggQuality, MAX_IDS_PER_REQUEST};
+use crate::spender::SpenderState;
+use crate::universalis::{AggItem, AggQuality, MAX_IDS_PER_REQUEST, TTL_MARKET};
 use crate::xivapi::ItemInfo;
 use crate::{scope, worlds, AppState};
 
@@ -27,18 +31,28 @@ pub const EVENT_CRAFT_PROGRESS: &str = "craft-progress";
 /// Recettes relues sur XIVAPI au-delà de cet âge (nouveaux patchs).
 const RECIPES_MAX_AGE_MS: i64 = 7 * 24 * 3600 * 1000;
 const MAX_ROWS: usize = 300;
+/// Résultats recalculés avec les vraies annonces (quantités comprises).
+const REAL_PRICED_ROWS: usize = 40;
 const BUYER_TAX: f64 = 0.05;
 
 #[derive(Serialize, Deserialize)]
 struct RecipeFile {
     fetched_at_ms: i64,
     recipes: Vec<Recipe>,
+    #[serde(default)]
+    gatherables: Vec<Gatherable>,
+}
+
+/// Recettes et récoltables, relus ensemble chaque semaine.
+pub struct GameData {
+    pub recipes: Vec<Recipe>,
+    pub gatherables: Vec<Gatherable>,
 }
 
 pub struct CraftState {
     http: Http,
     file: PathBuf,
-    recipes: Mutex<Option<(i64, Arc<Vec<Recipe>>)>>,
+    recipes: Mutex<Option<(i64, Arc<GameData>)>>,
     running: Mutex<()>,
     last: Mutex<Option<CraftResults>>,
 }
@@ -48,7 +62,21 @@ impl CraftState {
         let cached = std::fs::read(&file)
             .ok()
             .and_then(|b| serde_json::from_slice::<RecipeFile>(&b).ok())
-            .map(|f| (f.fetched_at_ms, Arc::new(f.recipes)));
+            // Ancien cache sans récoltables : on le relira.
+            .map(|f| {
+                let at = if f.gatherables.is_empty() {
+                    0
+                } else {
+                    f.fetched_at_ms
+                };
+                (
+                    at,
+                    Arc::new(GameData {
+                        recipes: f.recipes,
+                        gatherables: f.gatherables,
+                    }),
+                )
+            });
         Self {
             http: Http::new(),
             file,
@@ -58,26 +86,35 @@ impl CraftState {
         }
     }
 
-    async fn recipes(&self) -> AppResult<Arc<Vec<Recipe>>> {
+    async fn recipes(&self) -> AppResult<Arc<GameData>> {
         let mut guard = self.recipes.lock().await;
         if let Some((at, r)) = guard.as_ref() {
             if now_ms() - at < RECIPES_MAX_AGE_MS {
                 return Ok(r.clone());
             }
         }
-        match craft::fetch_recipes(&CoreXivApi::new(self.http.clone())).await {
-            Ok(recipes) => {
+        let api = CoreXivApi::new(self.http.clone());
+        let fetched = match craft::fetch_recipes(&api).await {
+            Ok(recipes) => craft::fetch_gatherables(&api).await.map(|g| (recipes, g)),
+            Err(e) => Err(e),
+        };
+        match fetched {
+            Ok((recipes, gatherables)) => {
                 let now = now_ms();
                 let file = RecipeFile {
                     fetched_at_ms: now,
                     recipes,
+                    gatherables,
                 };
                 if let Ok(bytes) = serde_json::to_vec(&file) {
                     if let Err(e) = std::fs::write(&self.file, bytes) {
                         tracing::warn!(error = %e, "recettes : écriture du cache impossible");
                     }
                 }
-                let r = Arc::new(file.recipes);
+                let r = Arc::new(GameData {
+                    recipes: file.recipes,
+                    gatherables: file.gatherables,
+                });
                 *guard = Some((now, r.clone()));
                 Ok(r)
             }
@@ -115,6 +152,24 @@ pub struct CraftRow {
     pub suggested_crafts: u32,
     /// Arbre d'une fabrication.
     pub tree: Node,
+    /// Coût recalculé sur les vraies annonces pour les fabrications conseillées.
+    pub real_prices: bool,
+    /// Pas assez d'annonces pour tout acheter.
+    pub insufficient: bool,
+    /// Achats à l'HV pour les fabrications conseillées (prix réels), par serveur.
+    pub purchases: Vec<RowPurchase>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RowPurchase {
+    pub item: u32,
+    pub world_id: i64,
+    pub world: String,
+    pub dc: String,
+    pub units: u32,
+    /// Total payé, taxe d'achat comprise.
+    pub cost: f64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -123,6 +178,8 @@ pub struct CraftResults {
     pub computed_at_ms: i64,
     pub tax_rate: f64,
     pub recipes_considered: usize,
+    /// Prix des marchands PNJ pris en compte (données des outils de dépense prêtes).
+    pub npc_prices: bool,
     pub rows: Vec<CraftRow>,
     /// Noms et icônes des composants des arbres.
     pub items: HashMap<u32, ItemInfo>,
@@ -134,6 +191,9 @@ pub struct CraftOptions {
     pub allow_expert: bool,
     pub allow_master: bool,
     pub include_specialist: bool,
+    /// Composants récoltables à mon niveau comptés gratuits.
+    #[serde(default)]
+    pub gather_myself: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -167,12 +227,13 @@ async fn analyze(app: &AppHandle, opts: CraftOptions) -> AppResult<CraftResults>
     }
     let worlds = worlds::load(&state.db).await?;
     let scope = scope::build(&settings, &worlds)?;
-    let recipes = cs.recipes().await?;
+    let data = cs.recipes().await?;
+    let recipes = &data.recipes;
     let levels = settings.crafter_levels.clone();
 
     let no_prices = HashMap::new();
     let probe = Costing::new(
-        &recipes,
+        recipes,
         &no_prices,
         &levels,
         opts.allow_expert,
@@ -255,12 +316,7 @@ async fn analyze(app: &AppHandle, opts: CraftOptions) -> AppResult<CraftResults>
                 if prices.get(&item).is_none_or(|p| unit < p.unit) {
                     prices.insert(
                         item,
-                        BuyPrice {
-                            unit,
-                            world: world.name.clone(),
-                            world_id,
-                            dc: world.dc.clone(),
-                        },
+                        BuyPrice::market(unit, &world.name, world_id, &world.dc),
                     );
                 }
             }
@@ -268,8 +324,52 @@ async fn analyze(app: &AppHandle, opts: CraftOptions) -> AppResult<CraftResults>
     }
 
     let tax = seller_tax(&state.universalis, &scope, &settings).await;
+    // Marchands PNJ : prix fixe, sans taxe d'achat.
+    let dataset = app.state::<SpenderState>().dataset().await;
+    if let Some(ds) = &dataset {
+        for o in &ds.gil_offers {
+            let unit = f64::from(o.price);
+            if unit > 0.0 && prices.get(&o.item).is_none_or(|p| unit < p.unit) {
+                let vendor = o
+                    .vendors
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "Marchand".into());
+                prices.insert(
+                    o.item,
+                    BuyPrice {
+                        unit,
+                        origin: Origin::Npc { vendor },
+                    },
+                );
+            }
+        }
+    }
+    // Récolte : gratuite (hors temps) si le métier est assez haut.
+    if opts.gather_myself {
+        for g in &data.gatherables {
+            let level = settings
+                .gatherer_levels
+                .get(g.job as usize)
+                .copied()
+                .unwrap_or(0);
+            if level >= g.level {
+                prices.insert(
+                    g.item,
+                    BuyPrice {
+                        unit: 0.0,
+                        origin: Origin::Gather {
+                            job: g.job,
+                            level: g.level,
+                        },
+                    },
+                );
+            }
+        }
+    }
+
     let mut costing = Costing::new(
-        &recipes,
+        recipes,
         &prices,
         &levels,
         opts.allow_expert,
@@ -331,7 +431,7 @@ async fn analyze(app: &AppHandle, opts: CraftOptions) -> AppResult<CraftResults>
     let infos = item_infos(&state.xivapi, &item_ids, settings.language).await;
     let horizon = f64::from(settings.sell_horizon_days);
 
-    let rows = ranked
+    let mut rows: Vec<CraftRow> = ranked
         .into_iter()
         .zip(trees)
         .filter_map(|((d, r), tree)| {
@@ -353,16 +453,134 @@ async fn analyze(app: &AppHandle, opts: CraftOptions) -> AppResult<CraftResults>
                 suggested_crafts: ((d.units * horizon) / f64::from(r.amount)).ceil().max(1.0)
                     as u32,
                 tree,
+                real_prices: false,
+                insufficient: false,
+                purchases: Vec::new(),
             })
         })
         .collect();
+
+    // Les premiers résultats sont recalculés sur les vraies annonces, pour les
+    // quantités des fabrications conseillées.
+    let top = rows.len().min(REAL_PRICED_ROWS);
+    if let Err(e) = real_prices(&state, &scope, &mut rows[..top], tax).await {
+        tracing::warn!(error = %e, "artisanat : prix réels indisponibles");
+    }
+    rows.retain(|r| !r.real_prices || (r.unit_profit > 0.0 && r.margin >= settings.min_margin));
+    rows.sort_by(|a, b| b.profit_per_day.total_cmp(&a.profit_per_day));
+
     Ok(CraftResults {
         computed_at_ms: now_ms(),
         tax_rate: tax,
         recipes_considered: craftable.len(),
+        npc_prices: dataset.is_some(),
         rows,
         items: infos,
     })
+}
+
+/// Objet → (quantité à acheter, coût unitaire estimé).
+type MarketNeeds = HashMap<u32, (f64, f64)>;
+
+/// Feuilles d'un arbre multipliées par `mult` : quantités à acheter à l'HV
+/// par objet, et coût des autres composants (PNJ, récolte).
+fn leaves(n: &Node, mult: f64, market: &mut MarketNeeds, other: &mut f64) {
+    match &n.source {
+        Source::Craft { .. } => n
+            .children
+            .iter()
+            .for_each(|c| leaves(c, mult, market, other)),
+        Source::Buy { .. } => {
+            let e = market.entry(n.item).or_insert((0.0, n.unit_cost));
+            e.0 += n.quantity * mult;
+        }
+        Source::Npc { .. } | Source::Gather { .. } => *other += n.unit_cost * n.quantity * mult,
+        Source::Missing => {}
+    }
+}
+
+async fn real_prices(
+    state: &AppState,
+    scope: &scope::Scope,
+    rows: &mut [CraftRow],
+    tax: f64,
+) -> AppResult<()> {
+    let mut needs: Vec<(MarketNeeds, f64)> = Vec::with_capacity(rows.len());
+    let mut ids: HashSet<u32> = HashSet::new();
+    for r in rows.iter() {
+        let mut market = HashMap::new();
+        let mut other = 0.0;
+        leaves(
+            &r.tree,
+            f64::from(r.suggested_crafts),
+            &mut market,
+            &mut other,
+        );
+        ids.extend(market.keys().copied());
+        needs.push((market, other));
+    }
+    let mut ids: Vec<u32> = ids.into_iter().collect();
+    ids.sort_unstable();
+    let mut offers: HashMap<u32, Vec<craft::Offer>> = HashMap::new();
+    for dc in &scope.dcs {
+        for chunk in ids.chunks(MAX_IDS_PER_REQUEST) {
+            let markets = state
+                .universalis
+                .market(&dc.name, chunk, Some(100), CachePolicy::MaxAge(TTL_MARKET))
+                .await?;
+            for (item, m) in markets {
+                let list = offers.entry(item).or_default();
+                for l in &m.listings {
+                    if let Some(w) = l.world_id.filter(|&w| scope.world(w).is_some()) {
+                        list.push((l.price_per_unit as f64, l.quantity, w));
+                    }
+                }
+            }
+        }
+    }
+    for (r, (market, other)) in rows.iter_mut().zip(needs) {
+        let mut total = other;
+        let mut purchases = Vec::new();
+        let mut insufficient = false;
+        for (item, (need, est_unit)) in market {
+            let list = offers.get(&item).map(Vec::as_slice).unwrap_or_default();
+            match craft::fill(list, need) {
+                Some((paid, by_world)) => {
+                    total += paid * (1.0 + BUYER_TAX);
+                    for (world_id, units, cost) in by_world {
+                        let Some(w) = scope.world(world_id) else {
+                            continue;
+                        };
+                        purchases.push(RowPurchase {
+                            item,
+                            world_id,
+                            world: w.name.clone(),
+                            dc: w.dc.clone(),
+                            units,
+                            cost: cost * (1.0 + BUYER_TAX),
+                        });
+                    }
+                }
+                None => {
+                    insufficient = true;
+                    total += need * est_unit;
+                }
+            }
+        }
+        let units = f64::from(r.suggested_crafts * r.amount);
+        r.unit_cost = total / units;
+        r.unit_profit = r.sell_price * (1.0 - tax) - r.unit_cost;
+        r.margin = if r.unit_cost > 0.0 {
+            r.unit_profit / r.unit_cost
+        } else {
+            f64::INFINITY
+        };
+        r.profit_per_day = r.unit_profit * r.units_per_day;
+        r.real_prices = true;
+        r.insufficient = insufficient;
+        r.purchases = purchases;
+    }
+    Ok(())
 }
 
 struct CraftRowDraft {

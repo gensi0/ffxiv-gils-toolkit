@@ -53,7 +53,10 @@ const COLUMNS = [
   c.accessor((o) => o.profit ?? -Infinity, {
     id: "profit",
     header: () => (
-      <Hint label="Bénéfice / unité" hint="Prix HV moins 5 % de taxe, moins le prix payé au PNJ." />
+      <Hint
+        label="Bénéfice / unité"
+        hint="Prix HV moins la taxe de vente de la semaine, moins le prix payé au PNJ."
+      />
     ),
     cell: (cell) => <SignedGil value={cell.row.original.profit} />,
     meta: { numeric: true },

@@ -9,6 +9,7 @@ import { useVentesAction } from "@/lib/queries";
 import { EmptyState, PageHeader } from "@/components/Page";
 import { LotChips, LotsTooltip } from "@/components/Lots";
 import { ItemIcon, QualityTag } from "@/components/market";
+import { MyStockBadge } from "@/components/MyStockBadge";
 import { ago, gil, percent } from "@/lib/format";
 import { averagePrice, margin } from "@/lib/purchase";
 import { cn } from "@/lib/utils";
@@ -207,6 +208,7 @@ function WorldCard({ g }: { g: WorldGroup }) {
                     <span className="max-w-52 truncate">{i.name}</span>
                     <QualityTag quality={i.quality} soldAs={i.soldAs} />
                   </button>
+                  {!i.bought && !i.forCraft && <MyStockBadge itemId={i.itemId} />}
                   {i.lots && i.lots.length > 1 && !i.bought && (
                     <span className="mt-0.5 block pl-6">
                       <LotChips lots={i.lots} />

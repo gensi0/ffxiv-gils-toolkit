@@ -189,6 +189,8 @@ export const spenderApi = {
   datasetStatus: () => invoke<Status>("spender_dataset_status"),
   buildDataset: () => invoke<Status>("spender_build_dataset"),
   currencies: () => invoke<Currency[]>("spender_currencies"),
+  /** Taxe de vente de la semaine (ratio) sur ce serveur, pour la cité de tes servants. */
+  tax: (world: string) => invoke<number>("spender_tax", { world }),
   offers: (currency: number, world: string, refresh: boolean) =>
     invoke<PricedOffer[]>("spender_offers", { currency, world, refresh }),
   gilOffers: (world: string, refresh: boolean) =>

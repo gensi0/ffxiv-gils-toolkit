@@ -1,12 +1,15 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, PageHeader } from "@/components/Page";
 import { Age, ConfidenceBadge, ItemIcon, QualityTag } from "@/components/market";
 import { ScanButton, ScanProgressBar } from "@/components/ScanControls";
-import { errorMessage, type ScanResults } from "@/lib/api";
+import { api, errorMessage, type ScanResults } from "@/lib/api";
 import { gil, gilShort } from "@/lib/format";
-import { useScanResults } from "@/lib/queries";
+import { useJournal, useScanResults, useVentes } from "@/lib/queries";
+import { cn } from "@/lib/utils";
+import { useShoppingList } from "@/store/shoppingList";
 import { useNav } from "@/store/nav";
 
 export function DashboardPage() {
@@ -17,6 +20,7 @@ export function DashboardPage() {
         <ScanButton />
       </PageHeader>
       <ScanProgressBar />
+      <Activity />
       {results.isError ? (
         <div className="flex items-center gap-3 p-4 text-xs text-destructive">
           {errorMessage(results.error)}
@@ -38,6 +42,125 @@ export function DashboardPage() {
         <Summary r={results.data} />
       )}
     </>
+  );
+}
+
+const WEEK = 7 * 24 * 3_600_000;
+
+/** Vue d'ensemble : ventes, gains, courses, artisanat. */
+function Activity() {
+  const setPage = useNav((s) => s.setPage);
+  const openItem = useNav((s) => s.openItem);
+  const ventes = useVentes();
+  const [since] = useState(() => Math.floor((Date.now() - WEEK) / 3_600_000) * 3_600_000);
+  const journal = useJournal(since);
+  const toBuy = useShoppingList((s) => s.items.filter((i) => !i.bought));
+  const craft = useQuery({ queryKey: ["craft", "last"], queryFn: api.craftLast });
+
+  const v = ventes.data;
+  const out = v?.listings.filter((l) => l.rank !== null && l.rank > v.topRank).length ?? 0;
+  const sales = journal.data?.sales ?? [];
+  const profit = sales.reduce((t, s) => {
+    if (s.costUnits === 0) return t;
+    const net = s.unitPrice * s.quantity * (1 - s.taxRate);
+    return t + (net * s.costUnits) / s.quantity - s.cost;
+  }, 0);
+  const crafts = craft.data?.rows.slice(0, 3) ?? [];
+
+  const link = (page: Parameters<typeof setPage>[0], children: ReactNode) => (
+    <button
+      type="button"
+      className="rounded-md border px-3 py-2 text-left hover:bg-muted/40"
+      onClick={() => {
+        setPage(page);
+      }}
+    >
+      {children}
+    </button>
+  );
+
+  return (
+    <div className="flex flex-col gap-3 px-4 pt-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {link(
+          "ventes",
+          <>
+            <div className="text-[11px] text-muted-foreground">Mes ventes</div>
+            <div className="text-base font-semibold tabular-nums">
+              {v?.configured ? `${String(v.listings.length)} annonces` : "—"}
+            </div>
+            {v?.configured && (out > 0 || v.pending.length > 0) && (
+              <div className="text-[11px] text-red-500">
+                {[
+                  out > 0 ? `${String(out)} hors top ${String(v.topRank)}` : null,
+                  v.pending.length > 0 ? `${String(v.pending.length)} à confirmer` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+            )}
+          </>,
+        )}
+        {link(
+          "journal",
+          <>
+            <div className="text-[11px] text-muted-foreground">Bénéfice réel · 7 jours</div>
+            <div
+              className={cn(
+                "text-base font-semibold tabular-nums",
+                profit > 0 && "text-emerald-500",
+                profit < 0 && "text-red-500",
+              )}
+            >
+              {sales.length > 0 ? `${profit >= 0 ? "+" : ""}${gilShort(profit)}` : "—"}
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              {sales.length} vente{sales.length > 1 ? "s" : ""}
+            </div>
+          </>,
+        )}
+        {link(
+          "courses",
+          <>
+            <div className="text-[11px] text-muted-foreground">Liste de courses</div>
+            <div className="text-base font-semibold tabular-nums">{toBuy.length} à acheter</div>
+            {toBuy.length > 0 && (
+              <div className="text-[11px] text-muted-foreground">
+                {gilShort(toBuy.reduce((t, i) => t + i.cost, 0))} gils
+              </div>
+            )}
+          </>,
+        )}
+        {link(
+          "artisanat",
+          <>
+            <div className="text-[11px] text-muted-foreground">Artisanat</div>
+            {crafts.length === 0 ? (
+              <div className="text-base font-semibold">—</div>
+            ) : (
+              <div className="flex flex-col text-[11px]">
+                {crafts.map((c) => (
+                  <span key={c.recipeId} className="flex justify-between gap-2">
+                    <span
+                      className="truncate hover:underline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openItem(c.item.id);
+                      }}
+                    >
+                      {c.item.name}
+                    </span>
+                    <span className="shrink-0 text-emerald-500 tabular-nums">
+                      {gilShort(c.profitPerDay)}/j
+                    </span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </>,
+        )}
+      </div>
+    </div>
   );
 }
 

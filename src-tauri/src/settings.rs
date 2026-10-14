@@ -84,6 +84,8 @@ pub struct Settings {
     pub sales_top_rank: u32,
     /// Niveaux des métiers d'artisan (ordre de `CraftType`) ; vide = non renseignés.
     pub crafter_levels: Vec<u32>,
+    /// Niveaux de récolte : Mineur, Botaniste, Pêcheur.
+    pub gatherer_levels: Vec<u32>,
     /// Lien ou identifiant Lodestone, pour réimporter les niveaux.
     pub lodestone: String,
 }
@@ -110,6 +112,7 @@ impl Default for Settings {
             retainer_names: Vec::new(),
             sales_top_rank: 1,
             crafter_levels: Vec::new(),
+            gatherer_levels: Vec::new(),
             lodestone: String::new(),
         }
     }

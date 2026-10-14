@@ -16,12 +16,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: macOS arm64
+          # Un seul .dmg universel (Apple Silicon + Intel) au lieu de deux.
+          - name: macOS universel
             os: macos-latest
-            args: --target aarch64-apple-darwin
-          - name: macOS x64 (cross-compiled on arm64)
-            os: macos-latest
-            args: --target x86_64-apple-darwin
+            args: --target universal-apple-darwin
           - name: Linux x64
             os: ubuntu-22.04
             args: ""

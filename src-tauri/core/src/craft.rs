@@ -23,6 +23,18 @@ pub const JOBS: [&str; 8] = [
     "Cuisinier",
 ];
 
+/// Métiers de récolte, dans l'ordre du Lodestone.
+pub const GATHER_JOBS: [&str; 3] = ["Mineur", "Botaniste", "Pêcheur"];
+
+/// Objet récoltable : métier (index dans [`GATHER_JOBS`]) et niveau minimal.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Gatherable {
+    pub item: u32,
+    pub job: u8,
+    pub level: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Recipe {
@@ -101,6 +113,78 @@ pub async fn fetch_recipes(xivapi: &XivApi) -> Result<Vec<Recipe>> {
         .collect())
 }
 
+/// Récoltables : points de récolte (minage, abattage…) et poissons. Le
+/// niveau retenu est le plus bas des points où l'objet apparaît.
+pub async fn fetch_gatherables(xivapi: &XivApi) -> Result<Vec<Gatherable>> {
+    let items = xivapi
+        .sheet("GatheringItem", "Item.value")
+        .await?
+        .into_iter()
+        .map(|r| (r.row_id, r.fields.get("Item").map(row_id).unwrap_or(0)))
+        .filter(|&(_, item)| item > 0)
+        .collect::<HashMap<u32, u32>>();
+    let points = xivapi
+        .sheet(
+            "GatheringPointBase",
+            "GatheringType.value,GatheringLevel,Item[].value",
+        )
+        .await?;
+    let fish = xivapi
+        .sheet("FishParameter", "Item.value,GatheringItemLevel.value")
+        .await?;
+    Ok(gatherables_from(&items, &points, &fish))
+}
+
+pub fn gatherables_from(
+    items: &HashMap<u32, u32>,
+    points: &[crate::xivapi::Row],
+    fish: &[crate::xivapi::Row],
+) -> Vec<Gatherable> {
+    let mut best: HashMap<(u32, u8), u32> = HashMap::new();
+    let mut keep = |item: u32, job: u8, level: u32| {
+        if item > 0 && level > 0 {
+            let e = best.entry((item, job)).or_insert(level);
+            *e = (*e).min(level);
+        }
+    };
+    for p in points {
+        let f = &p.fields;
+        // 0-1 : minage, extraction ; 2-3 : coupe, fauchage ; 4+ : harpon.
+        let job = match f.get("GatheringType").map(row_id) {
+            Some(0 | 1) => 0,
+            Some(2 | 3) => 1,
+            _ => continue,
+        };
+        let level = f.get("GatheringLevel").and_then(Value::as_u64).unwrap_or(0) as u32;
+        for g in f
+            .get("Item")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            if let Some(&item) = items.get(&row_id(g)) {
+                keep(item, job, level);
+            }
+        }
+    }
+    for r in fish {
+        let item = r.fields.get("Item").map(row_id).unwrap_or(0);
+        let level = r
+            .fields
+            .get("GatheringItemLevel")
+            .map(row_id)
+            .unwrap_or(0)
+            .min(100);
+        keep(item, 2, level);
+    }
+    let mut out: Vec<Gatherable> = best
+        .into_iter()
+        .map(|((item, job), level)| Gatherable { item, job, level })
+        .collect();
+    out.sort_by_key(|g| (g.item, g.job));
+    out
+}
+
 // ---------- Lodestone ----------
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -109,6 +193,8 @@ pub struct LodestoneJobs {
     pub character: String,
     /// Niveau par métier, dans l'ordre de [`JOBS`] (0 = jamais monté).
     pub levels: Vec<u32>,
+    /// Niveaux de récolte, dans l'ordre de [`GATHER_JOBS`].
+    pub gatherer_levels: Vec<u32>,
 }
 
 /// Identifiant numérique depuis une URL Lodestone ou l'identifiant seul.
@@ -134,6 +220,7 @@ pub fn parse_lodestone(html: &str) -> Option<LodestoneJobs> {
         .unwrap_or_default()
         .to_string();
     let mut levels = vec![0; JOBS.len()];
+    let mut gatherer_levels = vec![0; GATHER_JOBS.len()];
     let mut found = 0;
     for block in html.split("<li>").skip(1) {
         let (Some(level), Some(name)) = (
@@ -145,9 +232,15 @@ pub fn parse_lodestone(html: &str) -> Option<LodestoneJobs> {
         if let Some(i) = JOBS.iter().position(|j| *j == name) {
             levels[i] = level.parse().unwrap_or(0);
             found += 1;
+        } else if let Some(i) = GATHER_JOBS.iter().position(|j| *j == name) {
+            gatherer_levels[i] = level.parse().unwrap_or(0);
         }
     }
-    (found == JOBS.len()).then_some(LodestoneJobs { character, levels })
+    (found == JOBS.len()).then_some(LodestoneJobs {
+        character,
+        levels,
+        gatherer_levels,
+    })
 }
 
 pub async fn fetch_lodestone(http: &Http, input: &str) -> Result<LodestoneJobs> {
@@ -162,13 +255,39 @@ pub async fn fetch_lodestone(http: &Http, input: &str) -> Result<LodestoneJobs> 
 
 // ---------- coût de revient ----------
 
-/// Prix d'achat le moins cher d'un objet, taxe d'achat comprise.
+/// D'où vient un composant qu'on ne fabrique pas.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Origin {
+    /// Hôtel des ventes (taxe d'achat comprise dans le prix).
+    Market {
+        world: String,
+        world_id: i64,
+        dc: String,
+    },
+    /// Marchand PNJ, prix fixe.
+    Npc { vendor: String },
+    /// Récolté soi-même : ne coûte que du temps.
+    Gather { job: u8, level: u32 },
+}
+
+/// Prix d'obtention le plus bas d'un objet sans le fabriquer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BuyPrice {
     pub unit: f64,
-    pub world: String,
-    pub world_id: i64,
-    pub dc: String,
+    pub origin: Origin,
+}
+
+impl BuyPrice {
+    pub fn market(unit: f64, world: &str, world_id: i64, dc: &str) -> Self {
+        Self {
+            unit,
+            origin: Origin::Market {
+                world: world.into(),
+                world_id,
+                dc: dc.into(),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -182,6 +301,14 @@ pub enum Source {
         world: String,
         world_id: i64,
         dc: String,
+    },
+    Npc {
+        vendor: String,
+    },
+    /// Index dans [`GATHER_JOBS`].
+    Gather {
+        job: u8,
+        level: u32,
     },
     Craft {
         recipe_id: u32,
@@ -306,11 +433,22 @@ impl<'a> Costing<'a> {
                 item,
                 quantity,
                 unit_cost: unit,
-                source: match self.prices.get(&item) {
-                    Some(p) => Source::Buy {
-                        world: p.world.clone(),
-                        world_id: p.world_id,
-                        dc: p.dc.clone(),
+                source: match self.prices.get(&item).map(|p| &p.origin) {
+                    Some(Origin::Market {
+                        world,
+                        world_id,
+                        dc,
+                    }) => Source::Buy {
+                        world: world.clone(),
+                        world_id: *world_id,
+                        dc: dc.clone(),
+                    },
+                    Some(Origin::Npc { vendor }) => Source::Npc {
+                        vendor: vendor.clone(),
+                    },
+                    Some(Origin::Gather { job, level }) => Source::Gather {
+                        job: *job,
+                        level: *level,
                     },
                     None => Source::Missing,
                 },
@@ -340,6 +478,39 @@ impl<'a> Costing<'a> {
     }
 }
 
+/// Annonce disponible : (prix unitaire, quantité, serveur).
+pub type Offer = (f64, u32, i64);
+
+/// Achat d'annonces entières, les moins chères d'abord, jusqu'à `need` unités.
+/// Renvoie le total payé (hors taxe d'achat) et, par serveur, (unités, coût) ;
+/// `None` si les annonces ne suffisent pas.
+/// Achat sur un serveur : (serveur, unités, coût).
+pub type WorldBuy = (i64, u32, f64);
+
+pub fn fill(offers: &[Offer], need: f64) -> Option<(f64, Vec<WorldBuy>)> {
+    let mut sorted: Vec<&Offer> = offers.iter().filter(|o| o.1 > 0).collect();
+    sorted.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut got = 0.0;
+    let mut paid = 0.0;
+    let mut by_world: Vec<WorldBuy> = Vec::new();
+    for &&(price, qty, world) in &sorted {
+        if got >= need - 1e-9 {
+            break;
+        }
+        let cost = price * f64::from(qty);
+        got += f64::from(qty);
+        paid += cost;
+        match by_world.iter_mut().find(|w| w.0 == world) {
+            Some(w) => {
+                w.1 += qty;
+                w.2 += cost;
+            }
+            None => by_world.push((world, qty, cost)),
+        }
+    }
+    (got >= need - 1e-9).then_some((paid, by_world))
+}
+
 /// Achats à faire pour un arbre : (objet, serveur) → quantité.
 pub fn shopping(node: &Node, out: &mut HashMap<(u32, String), f64>) {
     match &node.source {
@@ -347,7 +518,7 @@ pub fn shopping(node: &Node, out: &mut HashMap<(u32, String), f64>) {
             *out.entry((node.item, world.clone())).or_default() += node.quantity
         }
         Source::Craft { .. } => node.children.iter().for_each(|c| shopping(c, out)),
-        Source::Missing => {}
+        Source::Npc { .. } | Source::Gather { .. } | Source::Missing => {}
     }
 }
 
@@ -371,12 +542,7 @@ mod tests {
     }
 
     fn price(unit: f64, world: &str) -> BuyPrice {
-        BuyPrice {
-            unit,
-            world: world.into(),
-            world_id: 1,
-            dc: "Chaos".into(),
-        }
+        BuyPrice::market(unit, world, 1, "Chaos")
     }
 
     #[test]
@@ -455,6 +621,95 @@ mod tests {
     }
 
     #[test]
+    fn npc_and_gathered_components_are_not_shopping() {
+        let recipes = vec![recipe(1, 10, 0, 1, &[(20, 2), (30, 1), (40, 1)])];
+        let prices = HashMap::from([
+            (
+                20,
+                BuyPrice {
+                    unit: 8.0,
+                    origin: Origin::Npc {
+                        vendor: "Marchand".into(),
+                    },
+                },
+            ),
+            (
+                30,
+                BuyPrice {
+                    unit: 0.0,
+                    origin: Origin::Gather { job: 0, level: 10 },
+                },
+            ),
+            (40, price(5.0, "Moogle")),
+        ]);
+        let levels = [100; 8];
+        let mut c = Costing::new(&recipes, &prices, &levels, false, false);
+        assert_eq!(c.best(10, &mut HashSet::new()), Some((21.0, Some(1))));
+        let tree = c.tree(10, 1.0, None);
+        assert!(matches!(tree.children[0].source, Source::Npc { .. }));
+        assert!(matches!(
+            tree.children[1].source,
+            Source::Gather { job: 0, level: 10 }
+        ));
+        let mut buy = HashMap::new();
+        shopping(&tree, &mut buy);
+        assert_eq!(buy.len(), 1, "seul l'achat à l'HV va dans la liste");
+    }
+
+    #[test]
+    fn gathering_level_is_the_lowest_node() {
+        use crate::xivapi::Row;
+        let items = HashMap::from([(1, 5000), (2, 5001)]);
+        let point = |t: u32, lvl: u32, gis: &[u32]| Row {
+            row_id: 0,
+            subrow_id: None,
+            fields: json!({
+                "GatheringType": {"value": t},
+                "GatheringLevel": lvl,
+                "Item": gis.iter().map(|g| json!({"value": g})).collect::<Vec<_>>()
+            }),
+        };
+        let points = vec![
+            point(0, 30, &[1]),
+            point(1, 20, &[1]),
+            point(3, 50, &[2]),
+            point(4, 10, &[2]),
+        ];
+        let fish = vec![Row {
+            row_id: 0,
+            subrow_id: None,
+            fields: json!({"Item": {"value": 4955}, "GatheringItemLevel": {"value": 23}}),
+        }];
+        let g = gatherables_from(&items, &points, &fish);
+        assert!(g.contains(&Gatherable {
+            item: 5000,
+            job: 0,
+            level: 20
+        }));
+        assert!(g.contains(&Gatherable {
+            item: 5001,
+            job: 1,
+            level: 50
+        }));
+        assert!(g.contains(&Gatherable {
+            item: 4955,
+            job: 2,
+            level: 23
+        }));
+        assert_eq!(g.len(), 3, "le harpon (type 4) est ignoré");
+    }
+
+    #[test]
+    fn fill_buys_whole_cheapest_listings() {
+        let offers = [(100.0, 5, 1), (50.0, 3, 2), (80.0, 10, 1), (60.0, 0, 3)];
+        let (paid, by_world) = fill(&offers, 6.0).unwrap();
+        // 3 × 50 (serveur 2) puis l'annonce de 10 à 80 en entier.
+        assert_eq!(paid, 150.0 + 800.0);
+        assert_eq!(by_world, vec![(2, 3, 150.0), (1, 10, 800.0)]);
+        assert!(fill(&offers, 100.0).is_none());
+    }
+
+    #[test]
     fn missing_ingredient_makes_the_recipe_uncraftable() {
         let recipes = vec![recipe(1, 10, 0, 1, &[(20, 1)])];
         let prices = HashMap::new();
@@ -498,6 +753,7 @@ mod tests {
         assert_eq!(lodestone_id("bonjour"), None);
 
         let mut html = String::from(r#"<p class="frame__chara__name">Gen Si</p><ul>"#);
+        html.push_str("<li><div class=\"character__job__level\">80</div><div class=\"character__job__name\">Mineur</div></li>");
         for (i, job) in JOBS.iter().enumerate() {
             let level = if i == 0 {
                 "-".to_string()
@@ -511,6 +767,7 @@ mod tests {
         let jobs = parse_lodestone(&html).unwrap();
         assert_eq!(jobs.character, "Gen Si");
         assert_eq!(jobs.levels, vec![0, 61, 62, 63, 64, 65, 66, 67]);
+        assert_eq!(jobs.gatherer_levels, vec![80, 0, 0]);
     }
 
     #[test]
@@ -532,6 +789,11 @@ mod tests {
             .block_on(fetch_recipes(&XivApi::new(Http::new())))
             .unwrap();
         println!("{} recettes", recipes.len());
+        let g = rt
+            .block_on(fetch_gatherables(&XivApi::new(Http::new())))
+            .unwrap();
+        println!("{} récoltables", g.len());
+        assert!(g.len() > 1_000);
         assert!(recipes.len() > 10_000);
     }
 }

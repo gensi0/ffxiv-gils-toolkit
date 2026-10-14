@@ -266,3 +266,14 @@ pub async fn journal_add_sale(
 pub async fn journal_delete_sale(state: State<'_, AppState>, id: i64) -> AppResult<()> {
     ventes::delete_sale(&state, id).await
 }
+
+/// « J'ai fabriqué » : ingrédients sortis du stock, résultat mis en stock.
+#[tauri::command]
+pub async fn journal_record_craft(
+    state: State<'_, AppState>,
+    item_id: u32,
+    quantity: i64,
+    ingredients: Vec<ventes::CraftInput>,
+) -> AppResult<f64> {
+    ventes::record_craft(&state, item_id, quantity, &ingredients).await
+}

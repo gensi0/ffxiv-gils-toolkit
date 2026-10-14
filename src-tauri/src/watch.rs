@@ -8,7 +8,7 @@
 //! are dropped client-side. Per-item filters keep traffic low: the server
 //! queue holds only 30 messages per client and drops the oldest.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -255,12 +255,16 @@ pub enum WsStatus {
 pub enum Cmd {
     Add(u32),
     Remove(u32),
+    /// Objets suivis par « Mes ventes » : leurs événements sur le serveur
+    /// principal déclenchent un relevé immédiat.
+    Ventes(Vec<u32>),
     /// Settings changed: rebuild the scope and re-snapshot everything.
     Reload,
 }
 
 pub struct WatchManager {
     items: Mutex<HashMap<u32, ItemState>>,
+    ventes: Mutex<HashSet<u32>>,
     status: Mutex<WsStatus>,
     tx: mpsc::UnboundedSender<Cmd>,
 }
@@ -270,6 +274,7 @@ impl WatchManager {
         let (tx, rx) = mpsc::unbounded_channel();
         let m = Self {
             items: Mutex::new(HashMap::new()),
+            ventes: Mutex::new(HashSet::new()),
             status: Mutex::new(WsStatus::Idle),
             tx,
         };
@@ -278,6 +283,18 @@ impl WatchManager {
 
     pub fn send(&self, cmd: Cmd) {
         let _ = self.tx.send(cmd);
+    }
+
+    /// Met à jour les objets de « Mes ventes » (sans effet s'ils n'ont pas changé).
+    pub fn set_ventes(&self, ids: &[u32]) {
+        let next: HashSet<u32> = ids.iter().copied().collect();
+        if *self.ventes.lock().expect("watch lock") != next {
+            self.send(Cmd::Ventes(ids.to_vec()));
+        }
+    }
+
+    fn ventes(&self) -> HashSet<u32> {
+        self.ventes.lock().expect("watch lock").clone()
     }
 
     pub fn status(&self) -> WsStatus {
@@ -593,6 +610,9 @@ async fn handle(app: &AppHandle, ctx: &Ctx, msg: ServerMsg) {
     let item_id = item as u32;
     let in_scope = ctx.scope.world(world).is_some();
     let is_home = world == ctx.scope.home.id;
+    if is_home && app.state::<AppState>().watch.ventes().contains(&item_id) {
+        crate::ventes::nudge();
+    }
     if !in_scope {
         return;
     }
@@ -651,13 +671,16 @@ async fn session(
         .iter()
         .map(|r| r.item_id as u32)
         .collect();
-    for &id in &ids {
+    let mut ventes = state.watch.ventes();
+    // Abonnements effectifs : suivi du marché + mes ventes.
+    let mut subscribed: HashSet<u32> = ids.iter().copied().chain(ventes.iter().copied()).collect();
+    for &id in &subscribed {
         subscribe(ws, "subscribe", id).await?;
     }
     set_status(
         app,
         WsStatus::Connected {
-            subscriptions: ids.len() * 2,
+            subscriptions: subscribed.len() * 2,
         },
     );
     snapshot_all(app, &ctx, &ids).await;
@@ -689,30 +712,39 @@ async fn session(
                 Some(Err(e)) => return Err(AppError::Other(format!("WebSocket: {e}"))),
                 None => return Err(AppError::Other("WebSocket stream ended".into())),
             },
-            cmd = rx.recv() => match cmd {
-                Some(Cmd::Add(id)) => {
-                    if !ids.contains(&id) {
-                        ids.push(id);
-                        subscribe(ws, "subscribe", id).await?;
+            cmd = rx.recv() => {
+                match cmd {
+                    Some(Cmd::Add(id)) => {
+                        if !ids.contains(&id) {
+                            ids.push(id);
+                        }
+                        snapshot(app, &ctx, id).await;
                     }
-                    set_status(app, WsStatus::Connected { subscriptions: ids.len() * 2 });
-                    snapshot(app, &ctx, id).await;
+                    Some(Cmd::Remove(id)) => ids.retain(|&x| x != id),
+                    Some(Cmd::Ventes(next)) => {
+                        ventes = next.into_iter().collect();
+                        *state.watch.ventes.lock().expect("watch lock") = ventes.clone();
+                    }
+                    Some(Cmd::Reload) => {
+                        ctx = build_ctx(&state).await?;
+                        snapshot_all(app, &ctx, &ids).await;
+                    }
+                    None => return Ok(SessionEnd::Shutdown),
                 }
-                Some(Cmd::Remove(id)) => {
-                    ids.retain(|&x| x != id);
+                let wanted: HashSet<u32> = ids.iter().copied().chain(ventes.iter().copied()).collect();
+                for &id in wanted.difference(&subscribed) {
+                    subscribe(ws, "subscribe", id).await?;
+                }
+                for &id in subscribed.difference(&wanted) {
                     subscribe(ws, "unsubscribe", id).await?;
-                    if ids.is_empty() {
-                        let _ = ws.close(None).await;
-                        return Ok(SessionEnd::Idle);
-                    }
-                    set_status(app, WsStatus::Connected { subscriptions: ids.len() * 2 });
                 }
-                Some(Cmd::Reload) => {
-                    ctx = build_ctx(&state).await?;
-                    snapshot_all(app, &ctx, &ids).await;
+                subscribed = wanted;
+                if subscribed.is_empty() {
+                    let _ = ws.close(None).await;
+                    return Ok(SessionEnd::Idle);
                 }
-                None => return Ok(SessionEnd::Shutdown),
-            },
+                set_status(app, WsStatus::Connected { subscriptions: subscribed.len() * 2 });
+            }
             _ = refresh.tick() => snapshot_all(app, &ctx, &ids).await,
         }
     }
@@ -734,9 +766,13 @@ pub async fn run(app: AppHandle, mut rx: mpsc::UnboundedReceiver<Cmd>) {
         let home_set = settings::load(&state.db)
             .await
             .is_ok_and(|s| s.home_world_id.is_some());
-        if !watched || !home_set {
+        if (!watched && state.watch.ventes().is_empty()) || !home_set {
             set_status(&app, WsStatus::Idle);
             match rx.recv().await {
+                Some(Cmd::Ventes(next)) => {
+                    *state.watch.ventes.lock().expect("watch lock") = next.into_iter().collect();
+                    continue;
+                }
                 Some(_) => continue,
                 None => return,
             }

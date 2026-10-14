@@ -219,6 +219,17 @@ impl Universalis {
         Ok(serde_json::from_str(&body)?)
     }
 
+    /// Réponse brute de `/aggregated`, en cache SQLite (outils de dépense).
+    pub async fn aggregated_raw(
+        &self,
+        scope: &str,
+        ids: &[u32],
+        policy: CachePolicy,
+    ) -> AppResult<String> {
+        let url = url(&format!("/aggregated/{scope}/{}", ids_csv(ids)), &[])?;
+        self.get(&url, policy).await
+    }
+
     /// Current listings (cheapest first, at most `listings` per item).
     pub async fn market(
         &self,

@@ -155,7 +155,7 @@ export function DeliveriesPage() {
           {sealValue ? (
             <Hint
               label={`${decimal(sealValue.gil)} gils`}
-              hint={`Meilleur échange de sceaux qui s'écoule en volume sur ton serveur : ${sealValue.itemName} (${gil(sealValue.cost)} sceaux), taxe de 5 % déduite. Suppose que tu as le grade requis.`}
+              hint={`Meilleur échange de sceaux qui s'écoule en volume sur ton serveur : ${sealValue.itemName} (${gil(sealValue.cost)} sceaux), taxe de vente de la semaine déduite. Suppose que tu as le grade requis.`}
             />
           ) : (
             "—"
