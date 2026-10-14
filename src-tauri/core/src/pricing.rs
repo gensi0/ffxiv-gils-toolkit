@@ -83,7 +83,7 @@ pub fn price_offers(
     out
 }
 
-/// Taxe de l'hôtel des ventes (5 % dans la plupart des cités).
+/// Taxe de vente par défaut, quand le taux de la semaine est inconnu.
 pub const MARKET_TAX: f64 = 0.05;
 
 /// Ventes par jour minimales pour qu'un objet compte comme écoulable.
@@ -143,7 +143,11 @@ fn velocity(m: &Market) -> Option<f64> {
     }
 }
 
-pub fn price_gil_offers(ds: &Dataset, markets: &HashMap<u32, Market>) -> Vec<PricedGilOffer> {
+pub fn price_gil_offers(
+    ds: &Dataset,
+    markets: &HashMap<u32, Market>,
+    tax: f64,
+) -> Vec<PricedGilOffer> {
     let empty = Market::default();
     let mut out: Vec<PricedGilOffer> = ds
         .gil_offers
@@ -152,7 +156,7 @@ pub fn price_gil_offers(ds: &Dataset, markets: &HashMap<u32, Market>) -> Vec<Pri
             let m = markets.get(&o.item).unwrap_or(&empty);
             // Un objet de PNJ est toujours NQ.
             let unit = unit_price(&m.nq);
-            let profit = unit.map(|p| p * (1.0 - MARKET_TAX) - f64::from(o.price));
+            let profit = unit.map(|p| p * (1.0 - tax) - f64::from(o.price));
             let (name, icon) = meta(ds, o.item);
             PricedGilOffer {
                 item: o.item,
@@ -201,6 +205,7 @@ pub fn currency_value(
     ds: &Dataset,
     currency: u32,
     markets: &HashMap<u32, Market>,
+    tax: f64,
 ) -> Option<CurrencyValue> {
     price_offers(ds, currency, markets)
         .into_iter()
@@ -210,7 +215,7 @@ pub fn currency_value(
         })
         .filter_map(|o| {
             o.gil_per_currency.map(|g| CurrencyValue {
-                gil: g * (1.0 - MARKET_TAX),
+                gil: g * (1.0 - tax),
                 item_name: o.name,
                 cost: o.cost,
             })
@@ -327,7 +332,11 @@ pub struct PricedDesynth {
     pub best_gain: Option<f64>,
 }
 
-pub fn price_desynths(ds: &Dataset, markets: &HashMap<u32, Market>) -> Vec<PricedDesynth> {
+pub fn price_desynths(
+    ds: &Dataset,
+    markets: &HashMap<u32, Market>,
+    tax: f64,
+) -> Vec<PricedDesynth> {
     let empty = Market::default();
     let mut out: Vec<PricedDesynth> = ds
         .desynths
@@ -357,7 +366,7 @@ pub fn price_desynths(ds: &Dataset, markets: &HashMap<u32, Market>) -> Vec<Price
                 .iter()
                 .filter(|r| r.daily_velocity.unwrap_or(0.0) >= MIN_VELOCITY)
                 .filter_map(|r| r.unit_price)
-                .map(|p| p * (1.0 - MARKET_TAX))
+                .map(|p| p * (1.0 - tax))
                 .reduce(f64::max);
             let (name, icon) = meta(ds, d.item);
             PricedDesynth {
@@ -480,7 +489,7 @@ mod tests {
                 ..Default::default()
             },
         )]);
-        let r = &price_gil_offers(&ds, &markets)[0];
+        let r = &price_gil_offers(&ds, &markets, MARKET_TAX)[0];
         assert_eq!(r.profit, Some(850.0)); // 1000 × 0,95 − 100
         assert_eq!(r.daily_profit, Some(1700.0));
     }

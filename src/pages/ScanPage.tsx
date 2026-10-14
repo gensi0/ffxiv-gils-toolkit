@@ -12,6 +12,7 @@ import { DataTable } from "@/components/DataTable";
 import { columnHelper } from "@/lib/table";
 import { EmptyState, PageHeader } from "@/components/Page";
 import { Age, ConfidenceBadge, ItemIcon, QualityTag } from "@/components/market";
+import { MyStockBadge } from "@/components/MyStockBadge";
 import { ScanButton, ScanProgressBar } from "@/components/ScanControls";
 import { CartButton } from "@/components/CartButton";
 import { LotsTooltip } from "@/components/Lots";
@@ -131,6 +132,7 @@ const opportunityColumns = [
       <span className="flex items-center gap-2">
         <ItemIcon path={c.row.original.item.iconPath} className="size-5" />
         <span className="max-w-64 truncate">{c.getValue()}</span>
+        <MyStockBadge itemId={c.row.original.item.id} />
       </span>
     ),
   }),

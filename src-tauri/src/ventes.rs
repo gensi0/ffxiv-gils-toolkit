@@ -37,6 +37,16 @@ const MATCH_SLACK_MS: i64 = 10 * 60 * 1000;
 const MARKET_MAX_AGE: Duration = Duration::from_secs(60);
 
 static LAST_POLL_MS: AtomicI64 = AtomicI64::new(0);
+/// Réveille la boucle de relevé (événement WebSocket sur un de mes objets).
+static NUDGE: std::sync::LazyLock<tokio::sync::Notify> =
+    std::sync::LazyLock::new(tokio::sync::Notify::new);
+/// Délai laissé à l'API REST d'Universalis pour refléter l'événement.
+const NUDGE_DELAY: Duration = Duration::from_secs(15);
+
+/// Demande un relevé rapide (annonce ou vente sur un objet suivi).
+pub fn nudge() {
+    NUDGE.notify_one();
+}
 static LAST_DISCOVERY_MS: AtomicI64 = AtomicI64::new(0);
 static DISCOVERING: AtomicBool = AtomicBool::new(false);
 /// Relevé complet du serveur (tous les objets) pour trouver toutes mes annonces.
@@ -701,7 +711,14 @@ pub async fn run(app: AppHandle) {
         if let Err(e) = poll(&app).await {
             tracing::warn!(error = %e, "suivi des ventes : relevé échoué");
         }
-        tokio::time::sleep(POLL_EVERY).await;
+        // Les objets suivis passent aussi par le WebSocket du suivi.
+        if let Ok(ids) = tracked_ids(&app.state::<AppState>().db).await {
+            app.state::<AppState>().watch.set_ventes(&ids);
+        }
+        tokio::select! {
+            () = tokio::time::sleep(POLL_EVERY) => {}
+            () = NUDGE.notified() => tokio::time::sleep(NUDGE_DELAY).await,
+        }
     }
 }
 
@@ -1025,6 +1042,64 @@ pub async fn close_listing(
     } else {
         close(&state.db, listing_id, "removed", now).await
     }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CraftInput {
+    pub item_id: u32,
+    pub quantity: f64,
+    /// Coût estimé par unité, utilisé pour ce qui n'est pas en stock.
+    pub unit_cost: f64,
+}
+
+/// Fabrication : consomme les ingrédients en stock (ordre d'achat) et met le
+/// résultat en stock à son coût réel. Les ingrédients absents du stock comptent
+/// à leur coût estimé. Renvoie le coût unitaire retenu.
+pub async fn record_craft(
+    state: &AppState,
+    item_id: u32,
+    quantity: i64,
+    ingredients: &[CraftInput],
+) -> AppResult<f64> {
+    if quantity <= 0 {
+        return Err(AppError::Invalid("quantité invalide".into()));
+    }
+    let mut tx = state.db.begin().await?;
+    let mut total = 0.0;
+    for ing in ingredients {
+        let need = ing.quantity.ceil().max(0.0) as i64;
+        let lots: Vec<Lot> = sqlx::query_as(
+            "SELECT id, remaining, unit_cost FROM stock_lots
+             WHERE item_id = ? AND remaining > 0 ORDER BY bought_at ASC",
+        )
+        .bind(i64::from(ing.item_id))
+        .fetch_all(&mut *tx)
+        .await?;
+        let (cost, covered, updates) = fifo(&lots, need);
+        for (id, remaining) in updates {
+            sqlx::query("UPDATE stock_lots SET remaining = ? WHERE id = ?")
+                .bind(remaining)
+                .bind(id)
+                .execute(&mut *tx)
+                .await?;
+        }
+        total += cost + (need - covered) as f64 * ing.unit_cost.max(0.0);
+    }
+    let unit = total / quantity as f64;
+    sqlx::query(
+        "INSERT INTO stock_lots (item_id, hq, quantity, remaining, unit_cost, bought_at, source_world)
+         VALUES (?, 0, ?, ?, ?, ?, 'Fabriqué')",
+    )
+    .bind(i64::from(item_id))
+    .bind(quantity)
+    .bind(quantity)
+    .bind(unit)
+    .bind(now_ms())
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(unit)
 }
 
 pub async fn track(state: &AppState, item_id: u32, on: bool) -> AppResult<()> {

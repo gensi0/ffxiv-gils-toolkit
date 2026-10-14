@@ -212,7 +212,7 @@ export function WatchlistPage() {
 
   return (
     <>
-      <PageHeader title="Suivi" />
+      <PageHeader title="Surveillance du marché" />
       {list.isError ? (
         <div className="flex items-center gap-3 p-4 text-xs text-destructive">
           {errorMessage(list.error)}
@@ -228,7 +228,7 @@ export function WatchlistPage() {
         </div>
       ) : list.data.length === 0 ? (
         <EmptyState
-          message="Aucun objet suivi. Ajoutes-en un depuis sa fiche pour le suivre en direct."
+          message="Aucun objet surveillé. Ajoutes-en un depuis sa fiche (« Surveiller le marché ») pour suivre ses prix en direct."
           action={
             <Button
               variant="outline"

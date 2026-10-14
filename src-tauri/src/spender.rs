@@ -13,7 +13,12 @@ use spender_core::http::Http;
 use spender_core::pricing::{
     self, CurrencyValue, PricedDelivery, PricedDesynth, PricedGilOffer, PricedOffer, PricedVenture,
 };
-use spender_core::universalis::{Market, Universalis};
+use spender_core::universalis::{self, Market};
+
+use crate::error::AppResult;
+use crate::net::CachePolicy;
+use crate::universalis::MAX_IDS_PER_REQUEST;
+use crate::{settings, AppState};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::{Mutex, RwLock};
 
@@ -67,6 +72,13 @@ fn load_dataset(path: &PathBuf) -> Option<Dataset> {
     (ds.version == DATASET_VERSION).then_some(ds)
 }
 
+impl SpenderState {
+    /// Jeu de données déjà construit (marchands PNJ, monnaies…), s'il existe.
+    pub async fn dataset(&self) -> Option<Arc<Dataset>> {
+        self.dataset.read().await.clone()
+    }
+}
+
 async fn current(state: &SpenderState) -> CmdResult<Arc<Dataset>> {
     state
         .dataset
@@ -118,6 +130,31 @@ pub async fn spender_currencies(state: State<'_, SpenderState>) -> CmdResult<Vec
     Ok(current(&state).await?.currencies.clone())
 }
 
+/// Taxe de vente de la semaine sur `world`, pour la cité de tes servants
+/// (5 % si Universalis ne répond pas).
+async fn seller_tax_for(app: &AppState, world: &str) -> f64 {
+    let Ok(s) = settings::load(&app.db).await else {
+        return pricing::MARKET_TAX;
+    };
+    let city = serde_json::to_value(s.retainer_city)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .unwrap_or_default();
+    match app.universalis.tax_rates(world).await {
+        Ok(rates) => rates
+            .get(&city)
+            .map_or(pricing::MARKET_TAX, |&p| f64::from(p) / 100.0),
+        Err(_) => pricing::MARKET_TAX,
+    }
+}
+
+/// Taxe de vente appliquée aux calculs des outils de dépense.
+#[tauri::command]
+pub async fn spender_tax(app: State<'_, AppState>, world: String) -> CmdResult<f64> {
+    check_world(&world)?;
+    Ok(seller_tax_for(&app, &world).await)
+}
+
 /// Le nom de serveur finit dans une URL Universalis : lettres uniquement.
 fn check_world(world: &str) -> CmdResult<()> {
     if !world.is_empty() && world.chars().all(|c| c.is_ascii_alphabetic()) {
@@ -129,6 +166,7 @@ fn check_world(world: &str) -> CmdResult<()> {
 
 /// Prix d'une liste d'objets sur un serveur, avec cache de [`PRICE_TTL`].
 async fn markets(
+    app: &AppState,
     state: &SpenderState,
     world: &str,
     list: String,
@@ -147,12 +185,25 @@ async fn markets(
     let mut ids: Vec<u32> = ids.collect();
     ids.sort_unstable();
     ids.dedup();
-    let m = Arc::new(
-        Universalis::new(state.http.clone())
-            .markets(world, &ids)
-            .await
-            .map_err(|e| e.to_string())?,
-    );
+    // Même client que le reste de l'app : limite de débit partagée et cache disque.
+    let policy = if refresh {
+        CachePolicy::Refresh
+    } else {
+        CachePolicy::MaxAge(PRICE_TTL)
+    };
+    let mut tasks = tokio::task::JoinSet::new();
+    for chunk in ids.chunks(MAX_IDS_PER_REQUEST) {
+        let api = app.universalis.clone();
+        let (world, chunk) = (world.to_string(), chunk.to_vec());
+        tasks.spawn(async move { api.aggregated_raw(&world, &chunk, policy).await });
+    }
+    let mut all = HashMap::new();
+    while let Some(res) = tasks.join_next().await {
+        let body: AppResult<String> = res.map_err(|e| e.to_string())?;
+        let body = body.map_err(|e| e.to_string())?;
+        all.extend(universalis::parse_aggregated(&body).map_err(|e| e.to_string())?);
+    }
+    let m = Arc::new(all);
     state
         .prices
         .lock()
@@ -162,6 +213,7 @@ async fn markets(
 }
 
 async fn currency_markets(
+    app: &AppState,
     state: &SpenderState,
     ds: &Dataset,
     world: &str,
@@ -173,12 +225,21 @@ async fn currency_markets(
         .iter()
         .filter(|o| o.currency == currency)
         .map(|o| o.item);
-    markets(state, world, format!("currency:{currency}"), ids, refresh).await
+    markets(
+        app,
+        state,
+        world,
+        format!("currency:{currency}"),
+        ids,
+        refresh,
+    )
+    .await
 }
 
 /// Échanges d'une monnaie, chiffrés aux prix du serveur choisi.
 #[tauri::command]
 pub async fn spender_offers(
+    app: State<'_, AppState>,
     state: State<'_, SpenderState>,
     currency: u32,
     world: String,
@@ -186,13 +247,14 @@ pub async fn spender_offers(
 ) -> CmdResult<Vec<PricedOffer>> {
     check_world(&world)?;
     let ds = current(&state).await?;
-    let m = currency_markets(&state, &ds, &world, currency, refresh).await?;
+    let m = currency_markets(&app, &state, &ds, &world, currency, refresh).await?;
     Ok(pricing::price_offers(&ds, currency, &m))
 }
 
 /// Objets des marchands PNJ, chiffrés à la revente.
 #[tauri::command]
 pub async fn spender_gil_offers(
+    app: State<'_, AppState>,
     state: State<'_, SpenderState>,
     world: String,
     refresh: bool,
@@ -200,8 +262,9 @@ pub async fn spender_gil_offers(
     check_world(&world)?;
     let ds = current(&state).await?;
     let ids = ds.gil_offers.iter().map(|o| o.item);
-    let m = markets(&state, &world, "gil".into(), ids, refresh).await?;
-    Ok(pricing::price_gil_offers(&ds, &m))
+    let m = markets(&app, &state, &world, "gil".into(), ids, refresh).await?;
+    let tax = seller_tax_for(&app, &world).await;
+    Ok(pricing::price_gil_offers(&ds, &m, tax))
 }
 
 #[derive(Serialize)]
@@ -214,6 +277,7 @@ pub struct Deliveries {
 /// Livraisons expertes, avec la valeur du sceau de la compagnie choisie.
 #[tauri::command]
 pub async fn spender_deliveries(
+    app: State<'_, AppState>,
     state: State<'_, SpenderState>,
     world: String,
     seal: u32,
@@ -224,10 +288,11 @@ pub async fn spender_deliveries(
         return Err(format!("Sceau inconnu : {seal}"));
     }
     let ds = current(&state).await?;
-    let seal_markets = currency_markets(&state, &ds, &world, seal, refresh).await?;
-    let seal_value = pricing::currency_value(&ds, seal, &seal_markets);
+    let seal_markets = currency_markets(&app, &state, &ds, &world, seal, refresh).await?;
+    let tax = seller_tax_for(&app, &world).await;
+    let seal_value = pricing::currency_value(&ds, seal, &seal_markets, tax);
     let ids = ds.deliveries.iter().map(|d| d.item);
-    let m = markets(&state, &world, "deliveries".into(), ids, refresh).await?;
+    let m = markets(&app, &state, &world, "deliveries".into(), ids, refresh).await?;
     let rows = pricing::price_deliveries(&ds, &m, seal_value.as_ref().map(|v| v.gil));
     Ok(Deliveries { seal_value, rows })
 }
@@ -235,6 +300,7 @@ pub async fn spender_deliveries(
 /// Missions de servants ciblées, avec les prix des objets rapportés.
 #[tauri::command]
 pub async fn spender_ventures(
+    app: State<'_, AppState>,
     state: State<'_, SpenderState>,
     world: String,
     refresh: bool,
@@ -242,13 +308,14 @@ pub async fn spender_ventures(
     check_world(&world)?;
     let ds = current(&state).await?;
     let ids = ds.ventures.iter().map(|v| v.item);
-    let m = markets(&state, &world, "ventures".into(), ids, refresh).await?;
+    let m = markets(&app, &state, &world, "ventures".into(), ids, refresh).await?;
     Ok(pricing::price_ventures(&ds, &m))
 }
 
 /// Objets à désynthétiser, avec la valeur de leurs résultats possibles.
 #[tauri::command]
 pub async fn spender_desynths(
+    app: State<'_, AppState>,
     state: State<'_, SpenderState>,
     world: String,
     refresh: bool,
@@ -259,6 +326,7 @@ pub async fn spender_desynths(
         .desynths
         .iter()
         .flat_map(|d| std::iter::once(d.item).chain(d.results.iter().copied()));
-    let m = markets(&state, &world, "desynths".into(), ids, refresh).await?;
-    Ok(pricing::price_desynths(&ds, &m))
+    let m = markets(&app, &state, &world, "desynths".into(), ids, refresh).await?;
+    let tax = seller_tax_for(&app, &world).await;
+    Ok(pricing::price_desynths(&ds, &m, tax))
 }

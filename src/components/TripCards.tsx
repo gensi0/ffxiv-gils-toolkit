@@ -1,4 +1,5 @@
 import { ConfidenceBadge, ItemIcon, QualityTag } from "@/components/market";
+import { MyStockBadge } from "@/components/MyStockBadge";
 import type { Opportunity, ScanResults, Trip } from "@/lib/api";
 import { gil, gilShort } from "@/lib/format";
 import { ShoppingCartIcon } from "lucide-react";
@@ -89,6 +90,7 @@ function TripCard({ trip, opportunities }: { trip: Trip; opportunities: Opportun
                   <ItemIcon path={o.item.iconPath} className="size-4" />
                   <span className="max-w-52 truncate">{o.item.name}</span>
                   <QualityTag quality={o.quality} soldAs={o.soldAs} />
+                  <MyStockBadge itemId={o.item.id} />
                 </span>
               </td>
               <td className="px-2 text-right text-muted-foreground tabular-nums">

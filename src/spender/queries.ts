@@ -61,6 +61,17 @@ export const useVentures = (world: string) =>
   });
 
 export const desynthsKey = (world: string) => ["spender", "desynths", world];
+/** Taxe de vente de la semaine (ratio), 5 % en attendant. */
+export function useSellerTax(world: string): number {
+  const q = useQuery({
+    queryKey: ["spender", "tax", world],
+    enabled: world !== "",
+    queryFn: () => spenderApi.tax(world),
+    staleTime: 60 * 60_000,
+  });
+  return q.data ?? 0.05;
+}
+
 export const useDesynths = (world: string) =>
   useQuery({
     queryKey: desynthsKey(world),

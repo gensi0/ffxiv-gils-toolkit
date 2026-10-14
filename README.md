@@ -9,20 +9,22 @@ compris.
 - **Scan** : objets moins chers sur un autre serveur ou centre de données que
   sur ton serveur principal, et que ton marché absorbera en quelques jours.
   Classés par gils par jour, pas par simple écart de prix.
-- **Suivi** : objets surveillés en direct (WebSocket Universalis), avec
+- **Surveillance du marché** : objets surveillés en direct (WebSocket Universalis), avec
   notifications.
 - **Liste de courses** : opportunités choisies dans un scan, regroupées par centre
   de données et serveur, avec budget, bénéfice attendu et cases « acheté » (le prix
   réellement payé est noté dans le journal).
 - **Artisanat** : ce que tu sais fabriquer (niveaux importés du Lodestone) et qui
-  rapporte, avec composants achetés ou fabriqués au moins cher dans tes régions,
-  bénéfice par unité et par jour, arbre de fabrication et ajout des ingrédients à
-  la liste de courses, regroupés par serveur.
+  rapporte. Chaque composant est acheté à l'HV, chez un marchand PNJ, récolté
+  (option) ou fabriqué, selon le moins cher. Les meilleurs résultats sont
+  recalculés sur les vraies annonces. Ingrédients vers la liste de courses et
+  bouton « J'ai fabriqué » pour suivre la marge réelle à la vente.
 - **Mes ventes** : toutes les annonces de tes servants, retrouvées en parcourant le
   marché de ton serveur (reconnues par leur nom), avec ton rang face à la
   concurrence, l'écart avec le moins cher, l'étiquette « Acheté » et ta marge pour
   ce qui vient de la liste de courses. Alerte quand une annonce sort de ton top X,
-  bouton « Prix modifié » quand tu changes un prix en jeu.
+  bouton « Prix modifié » quand tu changes un prix en jeu. Les ventes sont
+  détectées en quasi temps réel (WebSocket Universalis).
 - **Journal des gains** : ventes détectées automatiquement (annonce disparue +
   vente identique dans l'historique Universalis), coût d'achat déduit dans
   l'ordre d'achat, bénéfice réel et marge sur 7 jours, 30 jours ou 1 an.
@@ -109,7 +111,8 @@ journaux (7 jours) dans le dossier de logs du système. Paramètres → À propo
 ## Versions
 
 Pousser un tag de version compile toutes les cibles et crée une release GitHub
-**brouillon** avec les installeurs (`.dmg`, `.deb`, `.AppImage`, `.msi`) :
+**brouillon** avec les installeurs (un `.dmg` universel Apple Silicon + Intel,
+`.deb`, `.AppImage`, `.msi`) :
 
 ```sh
 # mettre à jour "version" dans src-tauri/tauri.conf.json et package.json avant

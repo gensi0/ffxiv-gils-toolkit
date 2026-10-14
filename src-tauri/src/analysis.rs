@@ -24,6 +24,16 @@ pub fn sales_of(history: &HistoryItem) -> Vec<SaleRec> {
         .collect()
 }
 
+/// Copie sans mes propres annonces : elles ne sont pas de la concurrence.
+pub fn without_mine(market: &MarketItem, mine: &[String]) -> MarketItem {
+    let mut m = market.clone();
+    if !mine.is_empty() {
+        m.listings
+            .retain(|l| !crate::ventes::is_mine(l.retainer_name.as_deref(), mine));
+    }
+    m
+}
+
 /// Listings grouped by world. `default_world` is used for world-scoped
 /// responses, whose listings carry no world id.
 pub fn listings_by_world(

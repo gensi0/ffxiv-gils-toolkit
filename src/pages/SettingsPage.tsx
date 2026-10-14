@@ -20,6 +20,7 @@ import { PageHeader } from "@/components/Page";
 import {
   api,
   CRAFT_JOBS,
+  GATHER_JOBS,
   errorMessage,
   LANGUAGES,
   RETAINER_CITIES,
@@ -130,6 +131,9 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
   const [crafterLevels, setCrafterLevels] = useState<string[]>(() =>
     CRAFT_JOBS.map((_, i) => (initial.crafterLevels[i] ? String(initial.crafterLevels[i]) : "")),
   );
+  const [gathererLevels, setGathererLevels] = useState<string[]>(() =>
+    GATHER_JOBS.map((_, i) => (initial.gathererLevels[i] ? String(initial.gathererLevels[i]) : "")),
+  );
   const [importing, setImporting] = useState(false);
   const importLodestone = () => {
     setImporting(true);
@@ -137,6 +141,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
       .craftLodestone(lodestone)
       .then((j) => {
         setCrafterLevels(j.levels.map((l) => (l > 0 ? String(l) : "")));
+        setGathererLevels(j.gathererLevels.map((l) => (l > 0 ? String(l) : "")));
         toast.success(`Niveaux de ${j.character} importés : pense à enregistrer.`);
       })
       .catch((e: unknown) => toast.error(errorMessage(e)))
@@ -195,6 +200,9 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
         lodestone: lodestone.trim(),
         crafterLevels: crafterLevels.some((l) => l.trim() !== "")
           ? crafterLevels.map((l) => Math.min(100, Math.max(0, Number.parseInt(l, 10) || 0)))
+          : [],
+        gathererLevels: gathererLevels.some((l) => l.trim() !== "")
+          ? gathererLevels.map((l) => Math.min(100, Math.max(0, Number.parseInt(l, 10) || 0)))
           : [],
       },
       {
@@ -371,7 +379,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
             </div>
           </Section>
 
-          <Section title="Suivi">
+          <Section title="Surveillance du marché">
             <div className="flex items-center gap-2">
               <Checkbox
                 id="notifications"
@@ -421,7 +429,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
             <Field
               label="Lodestone"
               htmlFor="lodestone"
-              hint="Lien de ta fiche personnage (ou son numéro) pour importer les niveaux de tes métiers d'artisan. Le Lodestone se met à jour avec un peu de retard."
+              hint="Lien de ta fiche personnage (ou son numéro) pour importer les niveaux de tes métiers d'artisan et de récolte. Le Lodestone se met à jour avec un peu de retard."
             >
               <div className="flex gap-2">
                 <Input
@@ -453,6 +461,22 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                     onChange={(e) => {
                       const v = e.target.value;
                       setCrafterLevels((l) => l.map((x, j) => (j === i ? v : x)));
+                    }}
+                  />
+                </Field>
+              ))}
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              {GATHER_JOBS.map((job, i) => (
+                <Field key={job} label={job} htmlFor={`gather-${String(i)}`}>
+                  <Input
+                    id={`gather-${String(i)}`}
+                    inputMode="numeric"
+                    placeholder="—"
+                    value={gathererLevels[i]}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setGathererLevels((l) => l.map((x, k) => (k === i ? v : x)));
                     }}
                   />
                 </Field>

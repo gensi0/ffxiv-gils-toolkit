@@ -13,6 +13,7 @@ export const useCraftOptions = create<CraftOptionsState>()(
       allowExpert: false,
       allowMaster: false,
       includeSpecialist: false,
+      gatherMyself: false,
       set: (patch) => {
         set(patch);
       },

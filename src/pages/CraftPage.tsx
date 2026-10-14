@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -20,6 +21,7 @@ import {
   api,
   CRAFT_JOBS,
   errorMessage,
+  GATHER_JOBS,
   EVENTS,
   type CraftNode,
   type CraftResults,
@@ -37,6 +39,46 @@ import { useShoppingList, type CraftIngredient } from "@/store/shoppingList";
 type Items = Record<string, ItemInfo>;
 
 const itemName = (items: Items, id: number) => items[String(id)]?.name ?? `Objet n°${String(id)}`;
+
+/** Achats aux prix réels (annonces), pour les fabrications conseillées. */
+function realIngredients(
+  row: CraftRow,
+  items: Items,
+  worlds: World[],
+  homeRegion: string | undefined,
+): CraftIngredient[] {
+  return row.purchases.map((p) => {
+    const info = items[String(p.item)];
+    const region = worlds.find((w) => w.id === p.worldId)?.region;
+    return {
+      itemId: p.item,
+      name: info?.name ?? `Objet n°${String(p.item)}`,
+      iconPath: info?.iconPath ?? null,
+      worldId: p.worldId,
+      world: p.world,
+      dc: p.dc,
+      crossRegion: region !== undefined && region !== homeRegion,
+      unitCost: p.cost / p.units,
+      units: p.units,
+    };
+  });
+}
+
+/** Tous les composants non fabriqués de `crafts` fabrications (pour le journal). */
+function consumed(tree: CraftNode, crafts: number) {
+  const out = new Map<number, { itemId: number; quantity: number; unitCost: number }>();
+  const walk = (n: CraftNode) => {
+    if (n.source.kind === "craft") {
+      n.children.forEach(walk);
+      return;
+    }
+    const prev = out.get(n.item);
+    if (prev) prev.quantity += n.quantity * crafts;
+    else out.set(n.item, { itemId: n.item, quantity: n.quantity * crafts, unitCost: n.unitCost });
+  };
+  walk(tree);
+  return [...out.values()];
+}
 
 /** Achats d'un arbre pour `crafts` fabrications, regroupés par objet et serveur. */
 function ingredients(
@@ -100,6 +142,18 @@ function TreeNode({ n, items, depth }: { n: CraftNode; items: Items; depth: numb
               {n.source.level}) · revient à {gil(n.unitCost)} / u
             </>
           )}
+          {n.source.kind === "npc" && (
+            <>
+              acheter chez <span className="text-foreground">{n.source.vendor}</span> (PNJ) à{" "}
+              {gil(n.unitCost)} / u
+            </>
+          )}
+          {n.source.kind === "gather" && (
+            <>
+              <span className="text-emerald-500">récolter</span> ({GATHER_JOBS[n.source.job]} niv.{" "}
+              {n.source.level})
+            </>
+          )}
           {n.source.kind === "missing" && <span className="text-red-500">introuvable</span>}
         </span>
       </div>
@@ -117,7 +171,25 @@ function Detail({ row, items }: { row: CraftRow; items: Items }) {
   const settings = useSettings();
   const n = Math.max(1, Number.parseInt(crafts, 10) || 1);
   const home = worlds.data?.find((w) => w.id === settings.data?.homeWorldId);
-  const list = ingredients(row.tree, n, items, worlds.data ?? [], home?.region);
+  const real = row.realPrices && n === row.suggestedCrafts && row.purchases.length > 0;
+  const list = real
+    ? realIngredients(row, items, worlds.data ?? [], home?.region)
+    : ingredients(row.tree, n, items, worlds.data ?? [], home?.region);
+  const [recording, setRecording] = useState(false);
+  const recordCraft = () => {
+    setRecording(true);
+    api
+      .journalRecordCraft(row.item.id, n * row.amount, consumed(row.tree, n))
+      .then((unit) => {
+        toast.success(
+          `${gil(n * row.amount)} × ${row.item.name} en stock à ${gil(unit)} gils l'unité : la marge suivra dans Mes ventes.`,
+        );
+      })
+      .catch((e: unknown) => toast.error(errorMessage(e)))
+      .finally(() => {
+        setRecording(false);
+      });
+  };
   const total = list.reduce((t, g) => t + g.units * g.unitCost, 0);
   return (
     <div className="flex flex-col gap-3 bg-muted/30 px-4 py-3">
@@ -154,6 +226,18 @@ function Detail({ row, items }: { row: CraftRow; items: Items }) {
           <ShoppingCartIcon />
           Ajouter les ingrédients à la liste
         </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="xs" variant="outline" disabled={recording} onClick={recordCraft}>
+              <HammerIcon />
+              J'ai fabriqué
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-64">
+            Sort les ingrédients de ton stock (achats notés) et met le résultat en stock à son coût
+            réel, pour suivre sa marge dans Mes ventes et le journal des gains.
+          </TooltipContent>
+        </Tooltip>
       </div>
       <p className="text-[11px] text-muted-foreground">
         Conseillé : {row.suggestedCrafts} fabrication{row.suggestedCrafts > 1 ? "s" : ""}, soit ce
@@ -167,6 +251,9 @@ function Detail({ row, items }: { row: CraftRow; items: Items }) {
 function Tags({ row }: { row: CraftRow }) {
   return (
     <span className="flex gap-1">
+      {row.insufficient && (
+        <span className="rounded bg-red-500/15 px-1 text-[10px] text-red-500">Stock HV limité</span>
+      )}
       {row.masterBook && (
         <span className="rounded bg-amber-500/15 px-1 text-[10px] text-amber-500">Livre</span>
       )}
@@ -184,6 +271,7 @@ function Tags({ row }: { row: CraftRow }) {
 
 export function CraftPage() {
   const opts = useCraftOptions();
+  const qc = useQueryClient();
   const settings = useSettings();
   const setPage = useNav((s) => s.setPage);
   const openItem = useNav((s) => s.openItem);
@@ -218,10 +306,12 @@ export function CraftPage() {
         allowExpert: opts.allowExpert,
         allowMaster: opts.allowMaster,
         includeSpecialist: opts.includeSpecialist,
+        gatherMyself: opts.gatherMyself,
       })
       .then((r) => {
         setResults(r);
         setOpen(null);
+        void qc.invalidateQueries({ queryKey: ["craft", "last"] });
       })
       .catch((e: unknown) => toast.error(errorMessage(e)))
       .finally(() => {
@@ -231,11 +321,18 @@ export function CraftPage() {
 
   const rows = (results?.rows ?? []).filter((r) => job === null || r.job === job);
 
-  const option = (key: "allowMaster" | "includeSpecialist" | "allowExpert", label: string) => (
+  const gatherLevels = settings.data?.gathererLevels ?? [];
+  const canGather = gatherLevels.some((l) => l > 0);
+  const option = (
+    key: "allowMaster" | "includeSpecialist" | "allowExpert" | "gatherMyself",
+    label: string,
+    disabled = false,
+  ) => (
     <div className="flex items-center gap-1.5">
       <Checkbox
         id={key}
-        checked={opts[key]}
+        disabled={disabled}
+        checked={opts[key] && !disabled}
         onCheckedChange={(c) => {
           opts.set({ [key]: c === true });
         }}
@@ -282,6 +379,16 @@ export function CraftPage() {
             {option("allowMaster", "Recettes de livres de maître")}
             {option("includeSpecialist", "Recettes de spécialiste")}
             {option("allowExpert", "Recettes expertes")}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>{option("gatherMyself", "Je récolte moi-même", !canGather)}</span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-64">
+                {canGather
+                  ? "Les composants récoltables à ton niveau (Mineur, Botaniste, Pêcheur) comptent gratuits : seul ton temps y passe."
+                  : "Renseigne tes niveaux de récolte dans les Paramètres (import Lodestone)."}
+              </TooltipContent>
+            </Tooltip>
             <span className="text-[11px] text-muted-foreground">
               Niveaux :{" "}
               {CRAFT_JOBS.map((j, i) => `${j.slice(0, 3)}. ${String(levels[i] ?? 0)}`).join(" · ")}
@@ -290,8 +397,16 @@ export function CraftPage() {
           <p className="text-[11px] text-muted-foreground">
             Pour chaque objet que tu sais fabriquer : composants au moins cher dans tes régions
             (achetés, ou fabriqués si c'est moins cher), vente en qualité normale sur ton serveur,
-            taxe déduite. Mêmes seuils que le scan (ventes par jour, marge minimale, fraîcheur).
+            taxe déduite. Mêmes seuils que le scan (ventes par jour, marge minimale, fraîcheur). Les
+            premiers résultats sont recalculés sur les vraies annonces, pour les quantités
+            conseillées.
           </p>
+          {results && !results.npcPrices && (
+            <p className="text-[11px] text-amber-500">
+              Les prix des marchands PNJ ne sont pas pris en compte : prépare les données dans
+              l'onglet Monnaies (une fois), puis relance l'analyse.
+            </p>
+          )}
 
           {running && (
             <div className="flex items-center gap-3">
@@ -409,7 +524,21 @@ export function CraftPage() {
                           <td className="px-2 text-muted-foreground">
                             {CRAFT_JOBS[r.job]} {r.level}
                           </td>
-                          <td className="px-2 text-right tabular-nums">{gil(r.unitCost)}</td>
+                          <td className="px-2 text-right tabular-nums">
+                            {r.realPrices ? (
+                              <Tooltip>
+                                <TooltipTrigger className="cursor-help underline decoration-emerald-500/60 decoration-dotted">
+                                  {gil(r.unitCost)}
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  Prix réels des annonces pour {r.suggestedCrafts} fabrication
+                                  {r.suggestedCrafts > 1 ? "s" : ""}.
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              gil(r.unitCost)
+                            )}
+                          </td>
                           <td className="px-2 text-right tabular-nums">{gil(r.sellPrice)}</td>
                           <td className="px-2 text-right font-medium text-emerald-500 tabular-nums">
                             +{gil(r.unitProfit)}

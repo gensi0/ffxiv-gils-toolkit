@@ -48,6 +48,8 @@ export interface Settings {
   salesTopRank: number;
   /** Niveaux des métiers d'artisan, ordre de CRAFT_JOBS ; vide = non renseignés. */
   crafterLevels: number[];
+  /** Niveaux de récolte : Mineur, Botaniste, Pêcheur ; vide = non renseignés. */
+  gathererLevels: number[];
   /** Lien ou identifiant Lodestone. */
   lodestone: string;
 }
@@ -208,8 +210,12 @@ export const CRAFT_JOBS = [
   "Cuisinier",
 ] as const;
 
+export const GATHER_JOBS = ["Mineur", "Botaniste", "Pêcheur"] as const;
+
 export type CraftSource =
   | { kind: "buy"; world: string; worldId: number; dc: string }
+  | { kind: "npc"; vendor: string }
+  | { kind: "gather"; job: number; level: number }
   | { kind: "craft"; recipeId: number; job: number; level: number }
   | { kind: "missing" };
 
@@ -238,12 +244,29 @@ export interface CraftRow {
   profitPerDay: number;
   suggestedCrafts: number;
   tree: CraftNode;
+  /** Coût recalculé sur les vraies annonces (quantités des fabrications conseillées). */
+  realPrices: boolean;
+  /** Pas assez d'annonces pour tout acheter. */
+  insufficient: boolean;
+  purchases: CraftPurchase[];
+}
+
+export interface CraftPurchase {
+  item: number;
+  worldId: number;
+  world: string;
+  dc: string;
+  units: number;
+  /** Total payé, taxe d'achat comprise. */
+  cost: number;
 }
 
 export interface CraftResults {
   computedAtMs: number;
   taxRate: number;
   recipesConsidered: number;
+  /** Prix des marchands PNJ pris en compte. */
+  npcPrices: boolean;
   rows: CraftRow[];
   items: Record<string, ItemInfo>;
 }
@@ -252,11 +275,13 @@ export interface CraftOptions {
   allowExpert: boolean;
   allowMaster: boolean;
   includeSpecialist: boolean;
+  gatherMyself: boolean;
 }
 
 export interface LodestoneJobs {
   character: string;
   levels: number[];
+  gathererLevels: number[];
 }
 
 // ---------- mes ventes et journal ----------
@@ -512,6 +537,12 @@ export const api = {
   journalAddSale: (s: { itemId: number; hq: boolean; quantity: number; unitPrice: number }) =>
     invoke<null>("journal_add_sale", s),
   journalDeleteSale: (id: number) => invoke<null>("journal_delete_sale", { id }),
+  /** « J'ai fabriqué » : renvoie le coût unitaire retenu. */
+  journalRecordCraft: (
+    itemId: number,
+    quantity: number,
+    ingredients: { itemId: number; quantity: number; unitCost: number }[],
+  ) => invoke<number>("journal_record_craft", { itemId, quantity, ingredients }),
   /** Taxe de vente de la semaine (en %) par cité, pour un serveur. */
   taxRates: (worldId: number) => invoke<Record<string, number>>("tax_rates", { worldId }),
   getSettings: () => invoke<Settings>("get_settings"),
