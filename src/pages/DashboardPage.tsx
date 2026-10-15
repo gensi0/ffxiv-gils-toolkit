@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,7 +54,10 @@ function Activity() {
   const ventes = useVentes();
   const [since] = useState(() => Math.floor((Date.now() - WEEK) / 3_600_000) * 3_600_000);
   const journal = useJournal(since);
-  const toBuy = useShoppingList((s) => s.items.filter((i) => !i.bought));
+  // Sélectionner la liste elle-même : un tableau recréé à chaque lecture fait
+  // boucler Zustand 5 (« Maximum update depth exceeded », écran noir).
+  const items = useShoppingList((s) => s.items);
+  const toBuy = useMemo(() => items.filter((i) => !i.bought), [items]);
   const craft = useQuery({ queryKey: ["craft", "last"], queryFn: api.craftLast });
 
   const v = ventes.data;

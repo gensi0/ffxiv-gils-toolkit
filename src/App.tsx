@@ -13,6 +13,7 @@ import { ScanPage } from "@/pages/ScanPage";
 import { SearchPage } from "@/pages/SearchPage";
 import { ShoppingListPage } from "@/pages/ShoppingListPage";
 import { JournalPage } from "@/pages/JournalPage";
+import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { CraftPage } from "@/pages/CraftPage";
 import { VentesPage } from "@/pages/VentesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
@@ -69,7 +70,9 @@ export default function App() {
             ) : needsSetup ? (
               <SettingsPage firstLaunch />
             ) : (
-              <Current />
+              <PageErrorBoundary resetKey={page}>
+                <Current />
+              </PageErrorBoundary>
             )}
           </main>
         </div>
