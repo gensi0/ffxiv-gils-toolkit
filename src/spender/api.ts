@@ -1,5 +1,5 @@
 // Commandes Tauri des outils de dépense (src-tauri/src/spender.rs).
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/backend";
 
 export type Category =
   | "assignats"

@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { accountStorage, SKIP_HYDRATION, syncAcrossDevices } from "@/lib/accountStorage";
 import type { Lot, Opportunity, Quality } from "@/lib/api";
 
 /** Ligne de la liste de courses : instantané de l'opportunité au moment de l'ajout. */
@@ -157,6 +158,12 @@ export const useShoppingList = create<ShoppingState>()(
         set({ items: [] });
       },
     }),
-    { name: "liste-de-courses" },
+    {
+      name: "liste-de-courses",
+      storage: createJSONStorage(() => accountStorage),
+      skipHydration: SKIP_HYDRATION,
+    },
   ),
 );
+
+syncAcrossDevices(useShoppingList);

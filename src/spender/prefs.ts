@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { accountStorage, SKIP_HYDRATION, syncAcrossDevices } from "@/lib/accountStorage";
 import type { SortingState } from "@tanstack/react-table";
 import type { VentureClass } from "@/spender/api";
 
@@ -65,6 +66,13 @@ export const usePrefs = create<Prefs>()(
         set((st) => ({ retainers: { ...st.retainers, [c]: { ...st.retainers[c], ...r } } }));
       },
     }),
-    { name: "gils-toolkit-depense", version: 1 },
+    {
+      name: "gils-toolkit-depense",
+      storage: createJSONStorage(() => accountStorage),
+      skipHydration: SKIP_HYDRATION,
+      version: 1,
+    },
   ),
 );
+
+syncAcrossDevices(usePrefs);

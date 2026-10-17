@@ -47,3 +47,43 @@ jobs:
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets -- -D warnings
       # Live-API tests are #[ignore]d and do not run here.
       - run: cargo test --manifest-path src-tauri/Cargo.toml --workspace
+
+  server:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: server
+      - run: cargo fmt --manifest-path server/Cargo.toml --check
+      - run: cargo clippy --manifest-path server/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path server/Cargo.toml
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: gils-toolkit:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # Démarre l'image et vérifie l'API, le client web et le healthcheck.
+      - name: Test de l'image
+        run: |
+          docker run -d --name gils -p 8080:8080 -e INVITE_CODE=ci -e COOKIE_SECURE=false gils-toolkit:ci
+          for i in $(seq 1 30); do curl -fs localhost:8080/api/health && break; sleep 1; done
+          curl -fs localhost:8080/ | grep -q "FFXIV Gils Toolkit"
+          curl -fs localhost:8080/manifest.webmanifest | grep -q standalone
+          curl -fs -c jar -H content-type:application/json -d '{"username":"ci-user","password":"motdepasse","invite":"ci"}' localhost:8080/api/auth/register
+          curl -fs -b jar -X POST localhost:8080/api/cmd/get_settings | grep -q homeWorldId
+          docker exec gils ffxiv-gils-server --healthcheck
+          docker exec gils ffxiv-gils-server --backup /data/backup
+          docker logs gils

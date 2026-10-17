@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { accountStorage, SKIP_HYDRATION, syncAcrossDevices } from "@/lib/accountStorage";
 import type { CraftOptions } from "@/lib/api";
 
 export type CraftSortKey =
@@ -31,6 +32,12 @@ export const useCraftOptions = create<CraftOptionsState>()(
         set(patch);
       },
     }),
-    { name: "options-artisanat" },
+    {
+      name: "options-artisanat",
+      storage: createJSONStorage(() => accountStorage),
+      skipHydration: SKIP_HYDRATION,
+    },
   ),
 );
+
+syncAcrossDevices(useCraftOptions);

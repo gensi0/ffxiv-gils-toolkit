@@ -1,0 +1,34 @@
+# FFXIV Gils Toolkit : serveur + client web, derrière Traefik.
+#
+# 1. Mets un code d'invitation dans INVITE_CODE (à donner aux joueurs).
+# 2. Adapte le nom du réseau Traefik et le certresolver à ta stack.
+# 3. docker compose up -d
+#
+# Mise à jour : docker compose pull && docker compose up -d
+# Sauvegarde : le volume « gils-data » (bases SQLite). Pour une copie à chaud
+# cohérente : docker compose exec gils-toolkit ffxiv-gils-server --backup /data/backup
+services:
+  gils-toolkit:
+    image: ghcr.io/gensi0/ffxiv-gils-toolkit:latest
+    container_name: gils-toolkit
+    restart: unless-stopped
+    environment:
+      INVITE_CODE: "change-moi"
+      TZ: Europe/Paris
+    volumes:
+      - gils-data:/data
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.gils.rule=Host(`gils.gensi.eu`)
+      - traefik.http.routers.gils.entrypoints=websecure
+      - traefik.http.routers.gils.tls.certresolver=letsencrypt
+      - traefik.http.services.gils.loadbalancer.server.port=8080
+
+volumes:
+  gils-data:
+
+networks:
+  traefik:
+    external: true

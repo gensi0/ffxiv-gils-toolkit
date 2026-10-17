@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listen } from "@tauri-apps/api/event";
+import { toast } from "sonner";
+import { listen } from "@/lib/backend";
 import {
   api,
   EVENTS,
@@ -129,6 +130,10 @@ export function useBackendEvents() {
       // Nouveau relevé de mes ventes : annonces, ventes détectées, stock.
       listen(EVENTS.ventesUpdate, () => {
         void qc.invalidateQueries({ queryKey: ["ventes"] });
+      }),
+      // Alerte du serveur pendant que l'app est ouverte (en plus du push).
+      listen<{ title: string; body: string }>("notification", (e) => {
+        toast(e.payload.title, { description: e.payload.body });
       }),
       listen<ScanProgress>(EVENTS.scanProgress, (e) => {
         setScan(e.payload);

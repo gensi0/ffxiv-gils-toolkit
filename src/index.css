@@ -139,4 +139,11 @@
   html {
     @apply font-sans;
   }
+  /* Encoche et barre d'état (téléphone, PWA plein écran). */
+  #root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
 }
