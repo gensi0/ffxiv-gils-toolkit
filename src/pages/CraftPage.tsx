@@ -7,6 +7,8 @@ import {
   HammerIcon,
   SettingsIcon,
   ShoppingCartIcon,
+  ArrowDownIcon,
+  ArrowUpIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,7 +34,7 @@ import {
 import { ago, decimal, gil, percent } from "@/lib/format";
 import { useSettings, useWorlds } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { useCraftOptions } from "@/store/craftOptions";
+import { useCraftOptions, type CraftSortKey } from "@/store/craftOptions";
 import { useNav } from "@/store/nav";
 import { useShoppingList, type CraftIngredient } from "@/store/shoppingList";
 
@@ -269,6 +271,54 @@ function Tags({ row }: { row: CraftRow }) {
   );
 }
 
+/** En-tête cliquable : trie le tableau (ordre gardé entre deux lancements). */
+function SortTh(p: {
+  k: CraftSortKey;
+  align?: "left" | "right";
+  className?: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  const sort = useCraftOptions((s) => s.sort);
+  const set = useCraftOptions((s) => s.set);
+  const active = sort.key === p.k;
+  const label = (
+    <button
+      type="button"
+      className={cn(
+        "inline-flex items-center gap-1 hover:text-foreground",
+        active && "text-foreground",
+      )}
+      onClick={() => {
+        // Premier clic : décroissant pour les nombres, alphabétique pour le texte.
+        set({ sort: { key: p.k, desc: active ? !sort.desc : p.k !== "item" && p.k !== "job" } });
+      }}
+    >
+      {p.children}
+      {active &&
+        (sort.desc ? <ArrowDownIcon className="size-3" /> : <ArrowUpIcon className="size-3" />)}
+    </button>
+  );
+  return (
+    <th
+      className={cn(
+        "px-2 font-normal",
+        p.align === "left" ? "text-left" : "text-right",
+        p.className,
+      )}
+    >
+      {p.hint ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{label}</TooltipTrigger>
+          <TooltipContent>{p.hint}</TooltipContent>
+        </Tooltip>
+      ) : (
+        label
+      )}
+    </th>
+  );
+}
+
 export function CraftPage() {
   const opts = useCraftOptions();
   const qc = useQueryClient();
@@ -319,7 +369,18 @@ export function CraftPage() {
       });
   };
 
-  const rows = (results?.rows ?? []).filter((r) => job === null || r.job === job);
+  const { key: sortKey, desc } = opts.sort;
+  const rows = (results?.rows ?? [])
+    .filter((r) => job === null || r.job === job)
+    .sort((a, b) => {
+      const c =
+        sortKey === "item"
+          ? a.item.name.localeCompare(b.item.name, "fr")
+          : sortKey === "job"
+            ? a.job - b.job || a.level - b.level
+            : a[sortKey] - b[sortKey];
+      return desc ? -c : c;
+    });
 
   const gatherLevels = settings.data?.gathererLevels ?? [];
   const canGather = gatherLevels.some((l) => l > 0);
@@ -466,21 +527,20 @@ export function CraftPage() {
                   <thead className="text-[11px] text-muted-foreground">
                     <tr>
                       <th className="w-6" />
-                      <th className="px-2 py-1.5 text-left font-normal">Objet</th>
-                      <th className="px-2 text-left font-normal">Métier</th>
-                      <th className="px-2 text-right font-normal">Coût / u</th>
-                      <th className="px-2 text-right font-normal">Vente / u</th>
-                      <th className="px-2 text-right font-normal">Bénéfice / u</th>
-                      <th className="px-2 text-right font-normal">Marge</th>
-                      <th className="px-2 text-right font-normal">Ventes / jour</th>
-                      <th className="px-2 text-right font-normal">
-                        <Tooltip>
-                          <TooltipTrigger className="cursor-help underline decoration-dotted">
-                            Bénéfice / jour
-                          </TooltipTrigger>
-                          <TooltipContent>Bénéfice par unité × ventes par jour.</TooltipContent>
-                        </Tooltip>
-                      </th>
+                      <SortTh k="item" align="left" className="py-1.5">
+                        Objet
+                      </SortTh>
+                      <SortTh k="job" align="left">
+                        Métier
+                      </SortTh>
+                      <SortTh k="unitCost">Coût / u</SortTh>
+                      <SortTh k="sellPrice">Vente / u</SortTh>
+                      <SortTh k="unitProfit">Bénéfice / u</SortTh>
+                      <SortTh k="margin">Marge</SortTh>
+                      <SortTh k="unitsPerDay">Ventes / jour</SortTh>
+                      <SortTh k="profitPerDay" hint="Bénéfice par unité × ventes par jour.">
+                        Bénéfice / jour
+                      </SortTh>
                     </tr>
                   </thead>
                   <tbody>

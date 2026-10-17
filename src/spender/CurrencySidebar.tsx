@@ -10,6 +10,7 @@ const ORDER: Category[] = [
   "tribusAlliees",
   "jcj",
   "chasse",
+  "embranchement",
   "autres",
 ];
 

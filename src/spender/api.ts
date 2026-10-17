@@ -2,7 +2,14 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type Category =
-  "assignats" | "memoquartz" | "grandeCompagnie" | "tribusAlliees" | "jcj" | "chasse" | "autres";
+  | "assignats"
+  | "memoquartz"
+  | "grandeCompagnie"
+  | "tribusAlliees"
+  | "jcj"
+  | "chasse"
+  | "embranchement"
+  | "autres";
 
 export const CATEGORY_LABEL: Record<Category, string> = {
   assignats: "Assignats",
@@ -11,6 +18,7 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   tribusAlliees: "Tribus alliées",
   jcj: "JcJ",
   chasse: "Chasse",
+  embranchement: "Donjons à embranchement",
   autres: "Autres",
 };
 

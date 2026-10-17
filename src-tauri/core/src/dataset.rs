@@ -25,7 +25,7 @@ use crate::xivapi::{icon_path, FieldsExt, Row, XivApi};
 use crate::Result;
 
 /// À incrémenter quand le format change : un fichier plus ancien est reconstruit.
-pub const DATASET_VERSION: u32 = 3;
+pub const DATASET_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,6 +36,8 @@ pub enum Category {
     TribusAlliees,
     Jcj,
     Chasse,
+    /// Donjons à embranchement (variantes) : Sil'dih, mont Rokkon, Aloalo.
+    Embranchement,
     Autres,
 }
 
@@ -154,6 +156,8 @@ const SCRIPS: &[u32] = &[33913, 33914, 41784, 41785];
 const PVP: &[u32] = &[36656];
 const HUNT: &[u32] = &[26533, 27, 10307];
 const OTHER: &[u32] = &[26807];
+/// Pièce d'argent sildienne, tsûhô de Shishû, pièce d'or de l'île d'Aloalo.
+const VARIANT: &[u32] = &[38534, 39885, 41079];
 /// Sceaux de grande compagnie : Maelstrom (1), Deux Vipères (2), Immortels (3).
 const GC_SEALS: [(u32, u32); 3] = [(1, 20), (2, 21), (3, 22)];
 
@@ -519,6 +523,7 @@ pub async fn build(http: &Http, progress: &(dyn Fn(Progress) + Sync)) -> Result<
         (SCRIPS, Category::Assignats),
         (PVP, Category::Jcj),
         (HUNT, Category::Chasse),
+        (VARIANT, Category::Embranchement),
         (OTHER, Category::Autres),
     ] {
         for &i in ids {
