@@ -31,6 +31,7 @@ import {
   type World,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { IS_MOBILE } from "@/lib/compact";
 import { useAppInfo, useSaveSettings, useSettings, useTaxRates, useWorlds } from "@/lib/queries";
 
 export function SettingsPage({ firstLaunch = false }: { firstLaunch?: boolean }) {
@@ -368,7 +369,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
           </Section>
 
           <Section title="Analyse">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {numberInput("minMarginPct", "Marge min. (%)", "Préfiltre : bénéfice estimé / coût.")}
               {numberInput(
                 "drillDownTopN",
@@ -392,7 +393,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                 Notifications de bureau sur les fortes variations
               </Label>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {numberInput(
                 "watchNotifyProfit",
                 "Notifier au-delà de (gils / trajet)",
@@ -416,7 +417,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                 }}
               />
             </Field>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {numberInput(
                 "salesTopRank",
                 "Rang visé",
@@ -450,7 +451,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                 </Button>
               </div>
             </Field>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {CRAFT_JOBS.map((job, i) => (
                 <Field key={job} label={job} htmlFor={`craft-${String(i)}`}>
                   <Input
@@ -466,7 +467,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
                 </Field>
               ))}
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {GATHER_JOBS.map((job, i) => (
                 <Field key={job} label={job} htmlFor={`gather-${String(i)}`}>
                   <Input
@@ -526,7 +527,7 @@ function About() {
           n'intègre aucun uploader.
         </p>
         <p>Outil de fan, non affilié à Square Enix. FINAL FANTASY XIV © SQUARE ENIX CO., LTD.</p>
-        <div className="flex items-center gap-2 pt-1">
+        <div className={cn("flex items-center gap-2 pt-1", IS_MOBILE && "hidden")}>
           <Button
             type="button"
             variant="outline"

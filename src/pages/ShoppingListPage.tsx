@@ -10,6 +10,7 @@ import { EmptyState, PageHeader } from "@/components/Page";
 import { LotChips, LotsTooltip } from "@/components/Lots";
 import { ItemIcon, QualityTag } from "@/components/market";
 import { MyStockBadge } from "@/components/MyStockBadge";
+import { useCompact } from "@/lib/compact";
 import { ago, gil, percent } from "@/lib/format";
 import { averagePrice, margin } from "@/lib/purchase";
 import { cn } from "@/lib/utils";
@@ -166,6 +167,82 @@ function WorldCard({ g }: { g: WorldGroup }) {
     setBought(i.key, false);
   };
   const done = g.items.every((i) => i.bought);
+  const compact = useCompact();
+  if (compact) {
+    return (
+      <section className={cn("flex flex-col rounded-md border text-xs", done && "opacity-60")}>
+        <header className="flex flex-wrap items-baseline gap-x-2 border-b px-3 py-2">
+          <span className="text-sm font-semibold">{g.world}</span>
+          {g.crossRegion && (
+            <span className="text-[11px] text-amber-600 dark:text-amber-400">inter-région</span>
+          )}
+          <span className="ml-auto text-muted-foreground tabular-nums">{gil(g.cost)}</span>
+          {g.profit > 0 && (
+            <span className="font-semibold text-emerald-500 tabular-nums">+{gil(g.profit)}</span>
+          )}
+        </header>
+        {g.items.map((i) => (
+          <div
+            key={i.key}
+            className="flex flex-col gap-1 border-t border-border/50 px-3 py-2 first:border-t-0"
+          >
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={i.bought || recording === i.key}
+                aria-label="Acheté"
+                onCheckedChange={(c) => {
+                  onCheck(i, c === true);
+                }}
+              />
+              <ItemIcon path={i.iconPath} className="size-5" />
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate",
+                  i.bought && "text-muted-foreground line-through",
+                )}
+              >
+                {i.name}
+              </span>
+              <QualityTag quality={i.quality} soldAs={i.soldAs} />
+              <button
+                type="button"
+                aria-label="Retirer"
+                className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground"
+                onClick={() => {
+                  remove(i.key);
+                }}
+              >
+                <XIcon className="size-4" />
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-x-3 pl-6 text-muted-foreground tabular-nums">
+              <span>
+                <span className="font-medium text-foreground">{gil(i.units)}</span> × moy.{" "}
+                {gil(averagePrice(i.lots ?? [], i.units, i.cost))}
+                {i.maxUnitPrice != null && ` (max ${gil(i.maxUnitPrice)})`}
+              </span>
+              {i.forCraft ? (
+                <span className="truncate">pour {i.forCraft.join(", ")}</span>
+              ) : (
+                <>
+                  <span>revente {gil(i.sellPrice)}</span>
+                  <span className="text-emerald-500">+{gil(i.profit)}</span>
+                </>
+              )}
+            </div>
+            {recording === i.key && (
+              <PurchaseForm
+                i={i}
+                onDone={() => {
+                  setRecording(null);
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </section>
+    );
+  }
   return (
     <section className={cn("flex flex-col rounded-md border text-xs", done && "opacity-60")}>
       <header className="flex items-baseline gap-2 border-b px-3 py-2">

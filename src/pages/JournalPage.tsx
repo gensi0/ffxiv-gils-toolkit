@@ -10,6 +10,7 @@ import { api, errorMessage, type JournalSale } from "@/lib/api";
 import { gil, percent } from "@/lib/format";
 import { useJournal, useVentesAction } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { useCompact } from "@/lib/compact";
 
 const DAY = 24 * 3_600_000;
 const PERIODS = [
@@ -75,6 +76,7 @@ function DeleteButton({ onClick, label }: { onClick: () => void; label: string }
 }
 
 export function JournalPage() {
+  const compact = useCompact();
   const [period, setPeriod] = useState<(typeof PERIODS)[number]["id"]>("30");
   const days = PERIODS.find((p) => p.id === period)?.days ?? 30;
   // Heure d'ouverture de la page, arrondie : la clé de requête reste stable.
@@ -149,120 +151,177 @@ export function JournalPage() {
 
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-semibold">Ventes ({sales.length})</h2>
-            <div className="rounded-md border">
-              <table className="w-full">
-                <thead className="text-[11px] text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-1.5 text-left font-normal">Date</th>
-                    <th className="px-2 text-left font-normal">Objet</th>
-                    <th className="px-2 text-right font-normal">Quantité × prix</th>
-                    <th className="px-2 text-right font-normal">Net</th>
-                    <th className="px-2 text-right font-normal">Coût</th>
-                    <th className="px-2 text-right font-normal">Bénéfice</th>
-                    <th className="px-2 text-left font-normal">Source</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {sales.map((s) => {
-                    const p = profit(s);
-                    return (
-                      <tr key={s.id} className="border-t border-border/50">
-                        <td className="h-8 px-3 text-muted-foreground tabular-nums">
-                          {date(s.soldAt)}
-                        </td>
-                        <td className="px-2">
-                          <span className="flex items-center gap-2">
-                            <ItemIcon path={s.item.iconPath} className="size-4" />
-                            <span className="max-w-60 truncate">{s.item.name}</span>
-                            <QualityTag quality={s.hq ? "HQ" : "NQ"} />
-                          </span>
-                        </td>
-                        <td className="px-2 text-right tabular-nums">
-                          {gil(s.quantity)} × {gil(s.unitPrice)}
-                        </td>
-                        <td className="px-2 text-right tabular-nums">{gil(net(s))}</td>
-                        <td className="px-2 text-right text-muted-foreground tabular-nums">
-                          {s.costUnits === 0
-                            ? "—"
-                            : `${gil(s.cost)}${s.costUnits < s.quantity ? ` (${String(s.costUnits)} u.)` : ""}`}
-                        </td>
-                        <td
-                          className={cn(
-                            "px-2 text-right font-medium tabular-nums",
-                            p !== null && (p >= 0 ? "text-emerald-500" : "text-red-500"),
-                          )}
-                        >
-                          {p === null ? "—" : `${p >= 0 ? "+" : ""}${gil(p)}`}
-                        </td>
-                        <td className="px-2 text-muted-foreground">
-                          {s.source === "auto" ? "détectée" : "manuelle"}
-                        </td>
-                        <td className="w-8 pr-2">
-                          <DeleteButton
-                            label="Supprimer cette vente"
-                            onClick={() => {
-                              delSale.mutate(s.id, { onError });
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {compact ? (
+              <div className="flex flex-col divide-y rounded-md border">
+                {sales.map((s) => {
+                  const p = profit(s);
+                  return (
+                    <div key={s.id} className="flex items-center gap-2 px-3 py-2">
+                      <ItemIcon path={s.item.iconPath} className="size-5" />
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate">{s.item.name}</span>
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                          {date(s.soldAt)} · {gil(s.quantity)} × {gil(s.unitPrice)}
+                        </span>
+                      </div>
+                      <span
+                        className={cn(
+                          "font-medium tabular-nums",
+                          p !== null && (p >= 0 ? "text-emerald-500" : "text-red-500"),
+                        )}
+                      >
+                        {p === null ? gil(net(s)) : `${p >= 0 ? "+" : ""}${gil(p)}`}
+                      </span>
+                      <DeleteButton
+                        label="Supprimer cette vente"
+                        onClick={() => {
+                          delSale.mutate(s.id, { onError });
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <table className="w-full">
+                  <thead className="text-[11px] text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left font-normal">Date</th>
+                      <th className="px-2 text-left font-normal">Objet</th>
+                      <th className="px-2 text-right font-normal">Quantité × prix</th>
+                      <th className="px-2 text-right font-normal">Net</th>
+                      <th className="px-2 text-right font-normal">Coût</th>
+                      <th className="px-2 text-right font-normal">Bénéfice</th>
+                      <th className="px-2 text-left font-normal">Source</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sales.map((s) => {
+                      const p = profit(s);
+                      return (
+                        <tr key={s.id} className="border-t border-border/50">
+                          <td className="h-8 px-3 text-muted-foreground tabular-nums">
+                            {date(s.soldAt)}
+                          </td>
+                          <td className="px-2">
+                            <span className="flex items-center gap-2">
+                              <ItemIcon path={s.item.iconPath} className="size-4" />
+                              <span className="max-w-60 truncate">{s.item.name}</span>
+                              <QualityTag quality={s.hq ? "HQ" : "NQ"} />
+                            </span>
+                          </td>
+                          <td className="px-2 text-right tabular-nums">
+                            {gil(s.quantity)} × {gil(s.unitPrice)}
+                          </td>
+                          <td className="px-2 text-right tabular-nums">{gil(net(s))}</td>
+                          <td className="px-2 text-right text-muted-foreground tabular-nums">
+                            {s.costUnits === 0
+                              ? "—"
+                              : `${gil(s.cost)}${s.costUnits < s.quantity ? ` (${String(s.costUnits)} u.)` : ""}`}
+                          </td>
+                          <td
+                            className={cn(
+                              "px-2 text-right font-medium tabular-nums",
+                              p !== null && (p >= 0 ? "text-emerald-500" : "text-red-500"),
+                            )}
+                          >
+                            {p === null ? "—" : `${p >= 0 ? "+" : ""}${gil(p)}`}
+                          </td>
+                          <td className="px-2 text-muted-foreground">
+                            {s.source === "auto" ? "détectée" : "manuelle"}
+                          </td>
+                          <td className="w-8 pr-2">
+                            <DeleteButton
+                              label="Supprimer cette vente"
+                              onClick={() => {
+                                delSale.mutate(s.id, { onError });
+                              }}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
 
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-semibold">Achats ({purchases.length})</h2>
-            <div className="rounded-md border">
-              <table className="w-full">
-                <thead className="text-[11px] text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-1.5 text-left font-normal">Date</th>
-                    <th className="px-2 text-left font-normal">Objet</th>
-                    <th className="px-2 text-right font-normal">Quantité × prix payé</th>
-                    <th className="px-2 text-right font-normal">Total</th>
-                    <th className="px-2 text-right font-normal">Reste en stock</th>
-                    <th className="px-2 text-left font-normal">Acheté sur</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {purchases.map((p) => (
-                    <tr key={p.id} className="border-t border-border/50">
-                      <td className="h-8 px-3 text-muted-foreground tabular-nums">
-                        {date(p.boughtAt)}
-                      </td>
-                      <td className="px-2">
-                        <span className="flex items-center gap-2">
-                          <ItemIcon path={p.item.iconPath} className="size-4" />
-                          <span className="max-w-60 truncate">{p.item.name}</span>
-                          <QualityTag quality={p.hq ? "HQ" : "NQ"} />
-                        </span>
-                      </td>
-                      <td className="px-2 text-right tabular-nums">
-                        {gil(p.quantity)} × {gil(p.unitCost)}
-                      </td>
-                      <td className="px-2 text-right tabular-nums">
-                        {gil(p.unitCost * p.quantity)}
-                      </td>
-                      <td className="px-2 text-right tabular-nums">{gil(p.remaining)}</td>
-                      <td className="px-2 text-muted-foreground">{p.sourceWorld ?? "—"}</td>
-                      <td className="w-8 pr-2">
-                        <DeleteButton
-                          label="Supprimer cet achat"
-                          onClick={() => {
-                            delPurchase.mutate(p.id, { onError });
-                          }}
-                        />
-                      </td>
+            {compact ? (
+              <div className="flex flex-col divide-y rounded-md border">
+                {purchases.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2 px-3 py-2">
+                    <ItemIcon path={p.item.iconPath} className="size-5" />
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate">{p.item.name}</span>
+                      <span className="text-[11px] text-muted-foreground tabular-nums">
+                        {date(p.boughtAt)} · {gil(p.quantity)} × {gil(p.unitCost)} · reste{" "}
+                        {gil(p.remaining)}
+                      </span>
+                    </div>
+                    <span className="tabular-nums">{gil(p.unitCost * p.quantity)}</span>
+                    <DeleteButton
+                      label="Supprimer cet achat"
+                      onClick={() => {
+                        delPurchase.mutate(p.id, { onError });
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <table className="w-full">
+                  <thead className="text-[11px] text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left font-normal">Date</th>
+                      <th className="px-2 text-left font-normal">Objet</th>
+                      <th className="px-2 text-right font-normal">Quantité × prix payé</th>
+                      <th className="px-2 text-right font-normal">Total</th>
+                      <th className="px-2 text-right font-normal">Reste en stock</th>
+                      <th className="px-2 text-left font-normal">Acheté sur</th>
+                      <th />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {purchases.map((p) => (
+                      <tr key={p.id} className="border-t border-border/50">
+                        <td className="h-8 px-3 text-muted-foreground tabular-nums">
+                          {date(p.boughtAt)}
+                        </td>
+                        <td className="px-2">
+                          <span className="flex items-center gap-2">
+                            <ItemIcon path={p.item.iconPath} className="size-4" />
+                            <span className="max-w-60 truncate">{p.item.name}</span>
+                            <QualityTag quality={p.hq ? "HQ" : "NQ"} />
+                          </span>
+                        </td>
+                        <td className="px-2 text-right tabular-nums">
+                          {gil(p.quantity)} × {gil(p.unitCost)}
+                        </td>
+                        <td className="px-2 text-right tabular-nums">
+                          {gil(p.unitCost * p.quantity)}
+                        </td>
+                        <td className="px-2 text-right tabular-nums">{gil(p.remaining)}</td>
+                        <td className="px-2 text-muted-foreground">{p.sourceWorld ?? "—"}</td>
+                        <td className="w-8 pr-2">
+                          <DeleteButton
+                            label="Supprimer cet achat"
+                            onClick={() => {
+                              delPurchase.mutate(p.id, { onError });
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </div>
       )}

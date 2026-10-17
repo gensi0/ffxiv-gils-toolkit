@@ -50,7 +50,12 @@ pub fn nudge() {
 static LAST_DISCOVERY_MS: AtomicI64 = AtomicI64::new(0);
 static DISCOVERING: AtomicBool = AtomicBool::new(false);
 /// Relevé complet du serveur (tous les objets) pour trouver toutes mes annonces.
-const DISCOVER_EVERY_MS: i64 = 30 * 60 * 1000;
+/// Sur téléphone, toutes les 2 heures : ~10 Mo de données par relevé complet.
+const DISCOVER_EVERY_MS: i64 = if cfg!(mobile) {
+    2 * 3600 * 1000
+} else {
+    30 * 60 * 1000
+};
 const DISCOVER_CHUNK: usize = 100;
 
 // ---------- logique pure (testée sans réseau) ----------
@@ -699,6 +704,19 @@ pub async fn discover(app: &AppHandle) -> AppResult<usize> {
 /// Boucle de fond : un relevé toutes les 3 minutes, un relevé complet toutes
 /// les 30 minutes.
 pub async fn run(app: AppHandle) {
+    // Android 13+ : les notifications demandent une autorisation explicite.
+    #[cfg(mobile)]
+    {
+        use tauri_plugin_notification::PermissionState;
+        if !matches!(
+            app.notification().permission_state(),
+            Ok(PermissionState::Granted)
+        ) {
+            if let Err(e) = app.notification().request_permission() {
+                tracing::warn!(error = %e, "autorisation des notifications refusée");
+            }
+        }
+    }
     loop {
         if now_ms() - LAST_DISCOVERY_MS.load(Ordering::Relaxed) >= DISCOVER_EVERY_MS
             && !DISCOVERING.load(Ordering::Relaxed)
