@@ -2,11 +2,23 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { CraftOptions } from "@/lib/api";
 
+export type CraftSortKey =
+  | "item"
+  | "job"
+  | "unitCost"
+  | "sellPrice"
+  | "unitProfit"
+  | "margin"
+  | "unitsPerDay"
+  | "profitPerDay";
+
 interface CraftOptionsState extends CraftOptions {
-  set: (patch: Partial<CraftOptions>) => void;
+  /** Tri du tableau (clic sur un en-tête). */
+  sort: { key: CraftSortKey; desc: boolean };
+  set: (patch: Partial<CraftOptions & { sort: { key: CraftSortKey; desc: boolean } }>) => void;
 }
 
-/** Options de l'analyse d'artisanat, gardées entre deux lancements. */
+/** Options de l'analyse d'artisanat et tri, gardés entre deux lancements. */
 export const useCraftOptions = create<CraftOptionsState>()(
   persist(
     (set) => ({
@@ -14,6 +26,7 @@ export const useCraftOptions = create<CraftOptionsState>()(
       allowMaster: false,
       includeSpecialist: false,
       gatherMyself: false,
+      sort: { key: "profitPerDay", desc: true },
       set: (patch) => {
         set(patch);
       },
