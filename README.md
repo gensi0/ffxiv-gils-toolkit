@@ -1,8 +1,10 @@
 # FFXIV Gils Toolkit
 
-Application de bureau (macOS, Linux, Windows) pour gagner des gils à l'hôtel des
-ventes de Final Fantasy XIV. Tout est en français, noms d'objets et de marchands
-compris.
+Application web (installable sur ordinateur et téléphone) pour gagner des gils à
+l'hôtel des ventes de Final Fantasy XIV. Tout est en français, noms d'objets et de
+marchands compris. Un serveur (une image Docker) fait le travail : scans, suivi
+des ventes 24 h/24, notifications. Chaque joueur a son compte, et retrouve ses
+données sur tous ses appareils.
 
 **Marché**
 
@@ -73,86 +75,97 @@ mieux. Le scan préfiltre d'abord ~17 000 objets via l'API agrégée d'Universal
 puis analyse en détail les 200 meilleurs. Tous les seuils sont dans
 `src-tauri/src/profit.rs`.
 
-## Lancer et compiler
+## Héberger le serveur
 
-Prérequis : [Rust](https://rustup.rs) (stable), Node.js 20+, pnpm et les
-[dépendances système de Tauri](https://tauri.app/start/prerequisites/).
+L'image `ghcr.io/gensi0/ffxiv-gils-toolkit` contient le serveur et le client web.
+Exemple avec Traefik : [`deploy/docker-compose.yml`](deploy/docker-compose.yml).
+
+```sh
+# INVITE_CODE : code à donner aux joueurs pour créer leur compte
+docker compose up -d
+docker compose pull && docker compose up -d   # mise à jour
+```
+
+Variables : `INVITE_CODE` (sans lui, inscriptions fermées), `DATA_DIR` (`/data`),
+`PORT` (8080), `COOKIE_SECURE` (`true` ; `false` seulement pour tester en HTTP),
+`RUST_LOG`.
+
+Les données sont dans le volume `/data` : `accounts.db` (comptes, sessions,
+abonnements push, clé VAPID), `users/<id>.db` (données de chaque compte, même
+schéma que l'app de bureau), `shared.db` (caches Universalis et XIVAPI communs),
+`icons/` et les données du jeu. Copie cohérente à chaud :
+`docker compose exec gils-toolkit ffxiv-gils-server --backup /data/backup`.
+
+Le serveur fait tourner en continu, pour chaque compte, le suivi de Mes ventes
+(relevé toutes les 3 min, relevé complet du serveur toutes les 30 min, WebSocket
+Universalis) et les scans programmés. Les requêtes Universalis de tous les
+comptes partagent le même cache et la même limite de débit.
+
+## Installer l'app
+
+Ouvre l'adresse du serveur, crée ton compte avec le code d'invitation, puis :
+
+- **Android (Chrome)** : menu ⋮ → **Ajouter à l'écran d'accueil** / **Installer
+  l'application** ;
+- **Ordinateur (Chrome, Edge)** : icône d'installation dans la barre d'adresse ;
+- **iPhone (Safari)** : Partager → **Sur l'écran d'accueil**.
+
+Puis Paramètres → Compte → Notifications sur cet appareil → **Activer** (à faire
+sur chaque appareil). Sur téléphone, l'app s'ouvre en **mode compagnon** :
+Accueil, Mes ventes, Liste de courses, Journal et Réglages.
+
+## Développer
+
+Prérequis : [Rust](https://rustup.rs) (stable), Node.js 22+, pnpm.
 
 ```sh
 pnpm install
-pnpm tauri dev      # lancement avec rechargement à chaud
-pnpm tauri build    # paquet pour la plateforme courante
+# serveur en local (HTTP, données dans ./data-dev)
+DATA_DIR=./data-dev WEB_DIR=./dist INVITE_CODE=dev COOKIE_SECURE=false \
+  cargo run --manifest-path server/Cargo.toml
+pnpm dev            # client sur :1420, API relayée vers :8080 (GILS_API)
 ```
 
 Vérifications :
 
 ```sh
 pnpm typecheck && pnpm lint && pnpm format:check
-pnpm rs:lint && pnpm rs:test
-# de bout en bout contre les API réelles (réseau, ~2 min)
-cargo test --manifest-path src-tauri/Cargo.toml live_ -- --ignored --nocapture
-# outils « Dépenser » : jeu de données réel + top d'une monnaie sur un serveur
-cargo run --manifest-path src-tauri/Cargo.toml -p spender-core --example live -- Moogle 41784
+cargo fmt --manifest-path server/Cargo.toml --check
+cargo clippy --manifest-path server/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path server/Cargo.toml
 ```
 
 Organisation du code :
 
-- `src-tauri/src` : scan, suivi, statistiques (SQLite) et commandes des outils
-  « Dépenser » (`spender.rs`) ;
-- `src-tauri/core` : crate `spender-core`, indépendante de Tauri, logique des
-  outils « Dépenser » ;
-- `src/` : interface React, outils « Dépenser » dans `src/spender`.
-
-Les données (base SQLite, données du jeu) sont dans le dossier de données de
-l'application (`~/Library/Application Support/app.ffxivtrader` sur macOS) ; les
-journaux (7 jours) dans le dossier de logs du système. Paramètres → À propos →
-« Ouvrir le dossier des journaux ».
-
-## Mode compagnon (Android)
-
-Sur téléphone, l'app s'ouvre en **mode compagnon** : Accueil, Mes ventes,
-Liste de courses, Journal et Réglages, avec une barre d'onglets en bas. Le scan,
-l'artisanat et la dépense des monnaies restent sur ordinateur. L'APK
-(`…_android-arm64.apk`) est joint à chaque release : l'installer demande
-d'autoriser les sources inconnues. Les données du téléphone sont indépendantes de
-celles de l'ordinateur, et le suivi ne tourne que lorsque l'app est ouverte.
+- `server/` : serveur axum. `app.rs` (contexte par compte), `auth.rs` (comptes,
+  sessions), `push.rs` (Web Push), `rpc.rs` (`POST /api/cmd/<commande>`, mêmes
+  commandes que sous Tauri), événements par WebSocket sur `/api/events` ; le reste
+  est la logique métier (scan, ventes, artisanat…) ;
+- `src-tauri/core` : crate `spender-core`, logique des outils « Dépenser » et de
+  l'artisanat, partagée ;
+- `src/` : interface React. `src/lib/backend.ts` choisit le transport : HTTP +
+  WebSocket dans le navigateur, commandes Tauri dans l'app de bureau ;
+- `src-tauri/` : application de bureau et Android (Tauri), gardée pour un futur
+  client lourd. Plus publiée à chaque version : workflow manuel « Clients
+  lourds » (`.github/workflows/desktop.yml`).
 
 ## Versions
 
-Pousser un tag de version compile toutes les cibles et crée une release GitHub
-**brouillon** avec les installeurs (un `.dmg` universel Apple Silicon + Intel,
-`.deb`, `.AppImage`, `.msi`) :
+Mettre à jour la version dans `package.json` et `server/Cargo.toml`, puis :
 
 ```sh
-# mettre à jour "version" dans src-tauri/tauri.conf.json et package.json avant
-git tag v0.3.0 && git push origin v0.3.0
+git tag vX.Y.Z && git push origin vX.Y.Z
 ```
 
-La CI (`.github/workflows/ci.yml`) lance typecheck, lint, format, rustfmt,
-clippy et les tests Rust à chaque push et pull request.
-
-### Ouvrir un build non signé
-
-- **macOS** : après l'avoir copiée dans Applications,
-  `xattr -cr "/Applications/FFXIV Gils Toolkit.app"`, ou clic droit → **Ouvrir**
-  → **Ouvrir** une fois.
-- **Windows** : sur « Windows a protégé votre ordinateur », **Informations
-  complémentaires** → **Exécuter quand même**.
-
-### Activer la signature
-
-Le workflow de release signe automatiquement si ces secrets existent dans le
-dépôt :
-
-- macOS : `APPLE_CERTIFICATE` (.p12 en base64), `APPLE_CERTIFICATE_PASSWORD`,
-  `APPLE_SIGNING_IDENTITY`, et pour la notarisation `APPLE_ID`, `APPLE_PASSWORD`
-  (mot de passe d'application), `APPLE_TEAM_ID`.
-- Windows : `WINDOWS_CERTIFICATE` (.pfx en base64), `WINDOWS_CERTIFICATE_PASSWORD`.
+Le workflow Release construit l'image Docker, la publie sur GHCR (`X.Y.Z` et
+`latest`) et crée une release GitHub brouillon. La CI lance typecheck, lint,
+format, rustfmt, clippy, les tests Rust, et construit puis teste l'image Docker à
+chaque pull request.
 
 ## Données hors ligne
 
 Si XIVAPI est injoignable, les noms, icônes et tailles de pile viennent d'un
-extrait embarqué de la feuille des objets (`src-tauri/data/items-fallback.tsv.gz`,
+extrait embarqué de la feuille des objets (`server/data/items-fallback.tsv.gz`,
 issu de [ffxiv-datamining](https://github.com/xivapi/ffxiv-datamining)). À
 régénérer après un patch avec `python3 scripts/gen_item_fallback.py`.
 

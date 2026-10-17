@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "@/lib/backend";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDownIcon,

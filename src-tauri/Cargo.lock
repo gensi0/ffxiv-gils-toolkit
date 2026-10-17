@@ -1205,7 +1205,7 @@ dependencies = [
 
 [[package]]
 name = "ffxiv-trader"
-version = "0.7.2"
+version = "0.9.0"
 dependencies = [
  "bson",
  "flate2",

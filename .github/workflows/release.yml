@@ -1,157 +1,47 @@
 name: Release
 
-# Push a tag like v0.2.0 to build every target and attach the installers to a
-# draft GitHub release. Builds are unsigned unless the optional signing
-# secrets below are configured (see README, "Releases").
+# Pousser un tag vX.Y.Z construit l'image Docker du serveur (API + client web),
+# la publie sur GHCR (vX.Y.Z et latest) et crée la release GitHub.
 on:
   push:
     tags: ["v*"]
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Un seul .dmg universel (Apple Silicon + Intel) au lieu de deux.
-          - name: macOS universel
-            os: macos-latest
-            args: --target universal-apple-darwin
-          - name: Linux x64
-            os: ubuntu-22.04
-            args: ""
-          - name: Windows x64
-            os: windows-latest
-            args: ""
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Tauri system dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-          key: ${{ matrix.name }}
-
-      # Signing hooks: each runs only when its secrets exist, so forks and
-      # unsigned v1 builds go through untouched.
-      - name: macOS signing and notarization (optional)
-        if: runner.os == 'macOS'
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          if [ -n "$APPLE_CERTIFICATE" ]; then
-            for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
-              echo "$v=${!v}" >> "$GITHUB_ENV"
-            done
-            echo "macOS signing enabled"
-          else
-            echo "No Apple secrets: building unsigned"
-          fi
-
-      - name: Windows code signing (optional)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        env:
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: |
-          if ($env:WINDOWS_CERTIFICATE) {
-            $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
-            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
-            $pw = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
-            $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw
-            # Merged into tauri.conf.json via --config <file> (a file avoids quoting issues).
-            $configFile = Join-Path $env:RUNNER_TEMP "tauri.sign.json"
-            @{ bundle = @{ windows = @{ certificateThumbprint = $cert.Thumbprint; digestAlgorithm = "sha256"; timestampUrl = "http://timestamp.digicert.com" } } } |
-              ConvertTo-Json -Depth 5 | Set-Content -Path $configFile -Encoding utf8
-            "TAURI_SIGN_CONFIG=--config $configFile" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-            Write-Output "Windows signing enabled"
-          } else {
-            Write-Output "No Windows certificate: building unsigned"
-          }
-
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: FFXIV Gils Toolkit ${{ github.ref_name }}
-          releaseBody: "Build non signé : voir le README pour l'ouvrir sur macOS et Windows."
-          releaseDraft: true
-          args: ${{ matrix.args }} ${{ env.TAURI_SIGN_CONFIG }}
-
-  # Mode compagnon (téléphone) : APK Android arm64 signé, ajouté à la même release.
-  android:
-    name: Android (APK)
-    needs: build
+  image:
+    name: Image Docker
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
-          version: 12
-      - uses: actions/setup-node@v4
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
         with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - uses: actions/setup-java@v4
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
         with:
-          distribution: temurin
-          java-version: 17
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-          key: android
-      - name: Signature
-        env:
-          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        run: |
-          echo "$ANDROID_KEYSTORE" | base64 -d > "$RUNNER_TEMP/gils-toolkit.jks"
-          {
-            echo "keyAlias=gils-toolkit"
-            echo "password=$ANDROID_KEYSTORE_PASSWORD"
-            echo "storeFile=$RUNNER_TEMP/gils-toolkit.jks"
-          } > src-tauri/gen/android/keystore.properties
-      - name: Build APK
-        run: |
-          export NDK_HOME="$ANDROID_NDK_LATEST_HOME"
-          pnpm tauri android build --apk --target aarch64
-      - name: Ajout à la release
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Release GitHub
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
-          apk=$(find src-tauri/gen/android -name "*release*.apk" | head -1)
-          cp "$apk" "FFXIV.Gils.Toolkit_${GITHUB_REF_NAME#v}_android-arm64.apk"
-          gh release upload "$GITHUB_REF_NAME" FFXIV.Gils.Toolkit_*_android-arm64.apk --clobber
+          gh release create "$TAG" --draft --title "FFXIV Gils Toolkit $TAG" --notes "Image : \`ghcr.io/${GITHUB_REPOSITORY}:${TAG#v}\` (et \`latest\`).
+
+          Mise à jour : \`docker compose pull && docker compose up -d\` (voir deploy/docker-compose.yml)." deploy/docker-compose.yml

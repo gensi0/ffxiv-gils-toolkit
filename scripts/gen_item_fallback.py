@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds src-tauri/data/items-fallback.tsv.gz from xivapi/ffxiv-datamining.
+"""Builds server/data/ and src-tauri/data/items-fallback.tsv.gz from xivapi/ffxiv-datamining.
 
 The app uses this bundled subset only when XIVAPI is unreachable. Re-run after
 a game patch:  python3 scripts/gen_item_fallback.py
@@ -17,7 +17,9 @@ import urllib.request
 
 BASE = "https://raw.githubusercontent.com/xivapi/ffxiv-datamining/master/csv"
 LANGS = ["en", "fr", "de", "ja"]
-OUT = pathlib.Path(__file__).resolve().parent.parent / "src-tauri" / "data" / "items-fallback.tsv.gz"
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+OUT = ROOT / "server" / "data" / "items-fallback.tsv.gz"
+COPY = ROOT / "src-tauri" / "data" / "items-fallback.tsv.gz"
 
 
 def fetch_rows(lang: str, sheet: str) -> tuple[list[str], list[list[str]]]:
@@ -70,6 +72,7 @@ def main() -> None:
         kept += 1
 
     OUT.write_bytes(gzip.compress(out.getvalue().encode("utf-8"), mtime=0))
+    COPY.write_bytes(OUT.read_bytes())
     print(f"{kept} marketable items -> {OUT} ({OUT.stat().st_size // 1024} KiB)")
 
 

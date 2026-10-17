@@ -1,0 +1,45 @@
+[package]
+name = "ffxiv-gils-server"
+version = "0.9.0"
+description = "FFXIV Gils Toolkit : serveur (API, comptes, tâches de fond) et client web"
+authors = ["Théo Orengo"]
+edition = "2021"
+license = "MIT"
+
+[[bin]]
+name = "ffxiv-gils-server"
+path = "src/main.rs"
+
+[dependencies]
+spender-core = { path = "../src-tauri/core" }
+axum = { version = "0.8", features = ["ws", "macros"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "compression-gzip", "set-header"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal", "net"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+governor = "0.10.4"
+futures = "0.3.34"
+tokio-util = "0.7.20"
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
+bson = { version = "3.1.0", features = ["serde"] }
+flate2 = "1.1.10"
+argon2 = "0.5"
+rand = "0.8"
+sha2 = "0.10"
+base64 = "0.22"
+web-push-native = "0.5"
+http = "1"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+strip = true

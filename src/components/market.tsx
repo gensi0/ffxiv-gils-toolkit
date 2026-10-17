@@ -1,5 +1,5 @@
 // Small presentational pieces shared by the market views.
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { iconUrl } from "@/lib/backend";
 import type { Confidence } from "@/lib/api";
 import { ago, isStale } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -9,15 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 export function ItemIcon({ path, className }: { path: string | null; className?: string }) {
   const size = cn("size-6 shrink-0 rounded-sm", className);
   if (!path) return <div className={cn(size, "bg-muted")} />;
-  return (
-    <img
-      src={convertFileSrc(path, "icon")}
-      alt=""
-      className={size}
-      loading="lazy"
-      draggable={false}
-    />
-  );
+  return <img src={iconUrl(path)} alt="" className={size} loading="lazy" draggable={false} />;
 }
 
 const CONFIDENCE: Record<Confidence, { label: string; className: string; hint: string }> = {

@@ -1,5 +1,5 @@
 // Typed wrappers around the Rust Tauri commands (src-tauri/src/commands.rs).
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@/lib/backend";
 
 export interface World {
   id: number;

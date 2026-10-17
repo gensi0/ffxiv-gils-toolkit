@@ -4,3 +4,5 @@ src-tauri/gen
 src-tauri/data
 pnpm-lock.yaml
 ffxiv-arbitrage-scanner-prompt.md
+server/target
+server/data

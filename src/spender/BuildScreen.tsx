@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { listen } from "@/lib/backend";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { errorMessage } from "@/lib/api";

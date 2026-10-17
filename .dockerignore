@@ -1,0 +1,9 @@
+target
+node_modules
+dist
+.git
+src-tauri/target
+src-tauri/gen
+server/target
+**/*.jks
+**/keystore.properties
