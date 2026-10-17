@@ -9,11 +9,25 @@ import { api, errorMessage, type ScanResults } from "@/lib/api";
 import { gil, gilShort } from "@/lib/format";
 import { useJournal, useScanResults, useVentes } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { useCompact } from "@/lib/compact";
 import { useShoppingList } from "@/store/shoppingList";
 import { useNav } from "@/store/nav";
 
 export function DashboardPage() {
   const results = useScanResults(null);
+  const compact = useCompact();
+  if (compact) {
+    return (
+      <>
+        <PageHeader title="Gils Toolkit" />
+        <Activity />
+        <p className="px-4 py-3 text-[11px] text-muted-foreground">
+          Mode compagnon : ventes, courses et journal. Scan, artisanat et dépense des monnaies
+          restent sur ordinateur.
+        </p>
+      </>
+    );
+  }
   return (
     <>
       <PageHeader title="Tableau de bord">
@@ -69,13 +83,15 @@ function Activity() {
     return t + (net * s.costUnits) / s.quantity - s.cost;
   }, 0);
   const crafts = craft.data?.rows.slice(0, 3) ?? [];
+  const compact = useCompact();
 
   const link = (page: Parameters<typeof setPage>[0], children: ReactNode) => (
     <button
       type="button"
       className="rounded-md border px-3 py-2 text-left hover:bg-muted/40"
       onClick={() => {
-        setPage(page);
+        // L'artisanat reste sur ordinateur : la tuile est seulement informative.
+        if (!(compact && page === "artisanat")) setPage(page);
       }}
     >
       {children}

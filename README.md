@@ -108,6 +108,15 @@ l'application (`~/Library/Application Support/app.ffxivtrader` sur macOS) ; les
 journaux (7 jours) dans le dossier de logs du système. Paramètres → À propos →
 « Ouvrir le dossier des journaux ».
 
+## Mode compagnon (Android)
+
+Sur téléphone, l'app s'ouvre en **mode compagnon** : Accueil, Mes ventes,
+Liste de courses, Journal et Réglages, avec une barre d'onglets en bas. Le scan,
+l'artisanat et la dépense des monnaies restent sur ordinateur. L'APK
+(`…_android-arm64.apk`) est joint à chaque release : l'installer demande
+d'autoriser les sources inconnues. Les données du téléphone sont indépendantes de
+celles de l'ordinateur, et le suivi ne tourne que lorsque l'app est ouverte.
+
 ## Versions
 
 Pousser un tag de version compile toutes les cibles et crée une release GitHub

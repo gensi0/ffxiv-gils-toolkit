@@ -106,3 +106,52 @@ jobs:
           releaseBody: "Build non signé : voir le README pour l'ouvrir sur macOS et Windows."
           releaseDraft: true
           args: ${{ matrix.args }} ${{ env.TAURI_SIGN_CONFIG }}
+
+  # Mode compagnon (téléphone) : APK Android arm64 signé, ajouté à la même release.
+  android:
+    name: Android (APK)
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: android
+      - name: Signature
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE" | base64 -d > "$RUNNER_TEMP/gils-toolkit.jks"
+          {
+            echo "keyAlias=gils-toolkit"
+            echo "password=$ANDROID_KEYSTORE_PASSWORD"
+            echo "storeFile=$RUNNER_TEMP/gils-toolkit.jks"
+          } > src-tauri/gen/android/keystore.properties
+      - name: Build APK
+        run: |
+          export NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          pnpm tauri android build --apk --target aarch64
+      - name: Ajout à la release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          apk=$(find src-tauri/gen/android -name "*release*.apk" | head -1)
+          cp "$apk" "FFXIV.Gils.Toolkit_${GITHUB_REF_NAME#v}_android-arm64.apk"
+          gh release upload "$GITHUB_REF_NAME" FFXIV.Gils.Toolkit_*_android-arm64.apk --clobber

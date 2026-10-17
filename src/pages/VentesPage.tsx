@@ -19,16 +19,19 @@ import { api, errorMessage, type MyListing, type VentesOverview } from "@/lib/ap
 import { ago, gil, percent } from "@/lib/format";
 import { useVentes, useVentesAction } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { useCompact } from "@/lib/compact";
 import { useNav } from "@/store/nav";
 
 function ItemName({ l }: { l: { item: MyListing["item"]; hq: boolean } }) {
   const openItem = useNav((s) => s.openItem);
+  const compact = useCompact();
   return (
     <button
       type="button"
       className="flex items-center gap-2 text-left hover:underline"
       onClick={() => {
-        openItem(l.item.id);
+        // La fiche objet (tableaux larges) n'existe pas en mode compagnon.
+        if (!compact) openItem(l.item.id);
       }}
     >
       <ItemIcon path={l.item.iconPath} className="size-5" />
@@ -283,6 +286,74 @@ function ListingRow({ l, top, tax }: { l: MyListing; top: number; tax: number })
   );
 }
 
+/** Annonce en carte (téléphone) : mêmes infos et actions que la ligne du tableau. */
+function ListingCard({ l, top, tax }: { l: MyListing; top: number; tax: number }) {
+  const [editing, setEditing] = useState(false);
+  const setPrice = useVentesAction((p: number) => api.ventesSetPrice(l.listingId, p));
+  const close = useVentesAction((sold: boolean) => api.ventesClose(l.listingId, sold, null));
+  const shown = l.expectedPrice ?? l.price;
+  return (
+    <div className="flex flex-col gap-2 rounded-md border p-3 text-xs">
+      <div className="flex items-start justify-between gap-2">
+        <ItemName l={l} />
+        <RankCell l={l} top={top} />
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+        <span>{l.retainer}</span>
+        <span className="tabular-nums">
+          {gil(l.quantity)} × <span className="font-medium text-foreground">{gil(shown)}</span>
+          {l.expectedPrice !== null && <span className="text-amber-500"> (en attente)</span>}
+        </span>
+        <span>depuis {ago(l.firstSeen)}</span>
+      </div>
+      <CostCell l={l} tax={tax} />
+      {editing ? (
+        <PriceInput
+          initial={l.suggestedPrice ?? shown}
+          label="Nouveau prix"
+          onCancel={() => {
+            setEditing(false);
+          }}
+          onSubmit={(p) => {
+            setPrice.mutate(p, {
+              onSuccess: () => {
+                setEditing(false);
+                toast.success("Prix noté, en attente de confirmation par Universalis.");
+              },
+              onError: (e) => toast.error(errorMessage(e)),
+            });
+          }}
+        />
+      ) : (
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1"
+            onClick={() => {
+              setEditing(true);
+            }}
+          >
+            <PencilIcon />
+            Prix modifié
+            {l.suggestedPrice !== null && ` (conseil ${gil(l.suggestedPrice)})`}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={close.isPending}
+            onClick={() => {
+              close.mutate(false, { onError: (e) => toast.error(errorMessage(e)) });
+            }}
+          >
+            Retirée
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type Filter = "all" | "out" | "bought";
 
 function PendingRow({ l }: { l: MyListing }) {
@@ -345,6 +416,7 @@ export function VentesPage() {
   const refresh = useVentesAction(() => api.ventesRefresh());
   const discover = useVentesAction(() => api.ventesDiscover());
   const [filter, setFilter] = useState<Filter>("all");
+  const compact = useCompact();
   const [search, setSearch] = useState("");
   const untrack = useVentesAction((id: number) => api.ventesTrack(id, false));
   const d = data.data;
@@ -369,7 +441,7 @@ export function VentesPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader title="Mes ventes">
-        {d?.lastPollMs != null && (
+        {d?.lastPollMs != null && !compact && (
           <span className="text-[11px] text-muted-foreground">relevé {ago(d.lastPollMs)}</span>
         )}
         <Tooltip>
@@ -392,7 +464,11 @@ export function VentesPage() {
               <SearchIcon
                 className={cn((discover.isPending || d?.discovering) && "animate-pulse")}
               />
-              {discover.isPending || d?.discovering ? "Recherche…" : "Chercher toutes mes annonces"}
+              {compact
+                ? null
+                : discover.isPending || d?.discovering
+                  ? "Recherche…"
+                  : "Chercher toutes mes annonces"}
             </Button>
           </TooltipTrigger>
           <TooltipContent className="max-w-64">
@@ -410,7 +486,7 @@ export function VentesPage() {
           }}
         >
           <RefreshCwIcon className={cn(refresh.isPending && "animate-spin")} />
-          Relever maintenant
+          {!compact && "Relever maintenant"}
         </Button>
       </PageHeader>
 
@@ -493,6 +569,12 @@ export function VentesPage() {
                     : "Aucune annonce de tes servants trouvée sur ton serveur."
                   : "Aucune annonce pour ce filtre."}
               </p>
+            ) : compact ? (
+              <div className="flex flex-col gap-2">
+                {shown.map((l) => (
+                  <ListingCard key={l.listingId} l={l} top={d.topRank} tax={d.taxRate} />
+                ))}
+              </div>
             ) : (
               <div className="rounded-md border">
                 <table className="w-full">

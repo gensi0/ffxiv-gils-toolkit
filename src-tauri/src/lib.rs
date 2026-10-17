@@ -106,6 +106,10 @@ fn spawn_background(app: &AppHandle, http: reqwest::Client) {
 async fn maybe_scheduled_scan(app: &AppHandle) -> error::AppResult<()> {
     let state = app.state::<AppState>();
     let s = settings::load(&state.db).await?;
+    // Mode compagnon : pas de scan automatique sur téléphone (données, batterie).
+    if cfg!(mobile) {
+        return Ok(());
+    }
     if s.scan_interval_hours == 0 || s.home_world_id.is_none() || state.scans.is_running() {
         return Ok(());
     }

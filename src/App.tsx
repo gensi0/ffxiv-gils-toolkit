@@ -14,6 +14,9 @@ import { SearchPage } from "@/pages/SearchPage";
 import { ShoppingListPage } from "@/pages/ShoppingListPage";
 import { JournalPage } from "@/pages/JournalPage";
 import { PageErrorBoundary } from "@/components/PageErrorBoundary";
+import { CompanionShell } from "@/components/CompanionShell";
+import { COMPANION_PAGES } from "@/lib/companionPages";
+import { useCompact } from "@/lib/compact";
 import { CraftPage } from "@/pages/CraftPage";
 import { VentesPage } from "@/pages/VentesPage";
 import { SettingsPage } from "@/pages/SettingsPage";
@@ -49,6 +52,7 @@ export default function App() {
   const settings = useSettings();
   const page = useNav((s) => s.page);
   const theme = settings.data?.theme ?? "dark";
+  const compact = useCompact();
   useBackendEvents();
 
   useEffect(() => {
@@ -58,6 +62,30 @@ export default function App() {
   // Until a home world is chosen, the setup form is the whole app.
   const needsSetup = settings.data?.homeWorldId === null;
   const Current = PAGES[page];
+
+  if (compact) {
+    // Mode compagnon : seulement les pages utiles en déplacement.
+    const allowed = COMPANION_PAGES.some((p) => p.page === page);
+    const Shown = allowed ? Current : DashboardPage;
+    return (
+      <TooltipProvider>
+        {settings.isPending ? (
+          <Skeleton className="m-4 h-7 w-64" />
+        ) : needsSetup ? (
+          <div className="h-full overflow-y-auto">
+            <SettingsPage firstLaunch />
+          </div>
+        ) : (
+          <CompanionShell>
+            <PageErrorBoundary resetKey={page}>
+              <Shown />
+            </PageErrorBoundary>
+          </CompanionShell>
+        )}
+        <Toaster theme={theme} position="top-center" />
+      </TooltipProvider>
+    );
+  }
 
   return (
     <TooltipProvider>
