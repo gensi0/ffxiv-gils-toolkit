@@ -132,6 +132,36 @@ public sealed unsafe class Collector : IDisposable
             .ToList();
     }
 
+    /// <summary>
+    /// Ajoute les monnaies gardées hors inventaire par le jeu (assignats,
+    /// monnaies des peuples alliés, insignes de chasse…) : tables du
+    /// CurrencyManager, indexées par identifiant d'objet.
+    /// </summary>
+    private static List<ItemCount> WithCurrencies(List<ItemCount> items)
+    {
+        var cm = CurrencyManager.Instance();
+        if (cm == null) return items;
+        var counts = items.ToDictionary(i => (i.ItemId, i.Hq), i => i.Count);
+        void Put(uint itemId, long count)
+        {
+            if (itemId == 0 || count <= 0) return;
+            // Une monnaie peut aussi être dans le sac « Monnaies » : pas de double compte.
+            counts[(itemId, false)] = Math.Max(counts.GetValueOrDefault((itemId, false)), count);
+        }
+        foreach (var kv in cm->ItemBucket) Put(kv.Item1, kv.Item2.Count);
+        foreach (var kv in cm->ContentItemBucket) Put(kv.Item1, kv.Item2.Count);
+        foreach (var kv in cm->SpecialItemBucket)
+        {
+            var id = cm->GetItemIdBySpecialId(kv.Item2.SpecialId);
+            Put(id != 0 ? id : kv.Item1, kv.Item2.Count);
+        }
+        return counts
+            .Select(kv => new ItemCount(kv.Key.Item1, kv.Key.Item2, kv.Value))
+            .OrderBy(i => i.ItemId)
+            .ThenBy(i => i.Hq)
+            .ToList();
+    }
+
     /// <summary>Annonces et inventaire du servant appelé (sonnette).</summary>
     private void ReadActiveRetainer()
     {
@@ -213,7 +243,7 @@ public sealed unsafe class Collector : IDisposable
 
     private void ReadInventory()
     {
-        var items = Aggregate(PlayerBags);
+        var items = WithCurrencies(Aggregate(PlayerBags));
         if (items.Count == 0) return;
         var key = Key(items);
         if (key == sentInventory) return;
