@@ -1,6 +1,6 @@
 [package]
 name = "ffxiv-gils-server"
-version = "0.10.2"
+version = "0.10.3"
 description = "FFXIV Gils Toolkit : serveur (API, comptes, tâches de fond) et client web"
 authors = ["Théo Orengo"]
 edition = "2021"

@@ -137,14 +137,24 @@ public sealed unsafe class Collector : IDisposable
     /// monnaies des peuples alliés, insignes de chasse…) : tables du
     /// CurrencyManager, indexées par identifiant d'objet.
     /// </summary>
+    /// <summary>Monnaies lues dans le CurrencyManager au dernier passage (diagnostic).</summary>
+    public static int LastCurrencyCount { get; private set; } = -1;
+
     private static List<ItemCount> WithCurrencies(List<ItemCount> items)
     {
         var cm = CurrencyManager.Instance();
-        if (cm == null) return items;
+        if (cm == null)
+        {
+            LastCurrencyCount = -1;
+            Plugin.Log.Debug("CurrencyManager indisponible");
+            return items;
+        }
+        var found = 0;
         var counts = items.ToDictionary(i => (i.ItemId, i.Hq), i => i.Count);
         void Put(uint itemId, long count)
         {
             if (itemId == 0 || count <= 0) return;
+            found++;
             // Une monnaie peut aussi être dans le sac « Monnaies » : pas de double compte.
             counts[(itemId, false)] = Math.Max(counts.GetValueOrDefault((itemId, false)), count);
         }
@@ -155,6 +165,8 @@ public sealed unsafe class Collector : IDisposable
             var id = cm->GetItemIdBySpecialId(kv.Item2.SpecialId);
             Put(id != 0 ? id : kv.Item1, kv.Item2.Count);
         }
+        LastCurrencyCount = found;
+        Plugin.Log.Debug($"Monnaies hors inventaire : {found} (spéciales {cm->SpecialItemBucket.Count}, objets {cm->ItemBucket.Count}, contenu {cm->ContentItemBucket.Count})");
         return counts
             .Select(kv => new ItemCount(kv.Key.Item1, kv.Key.Item2, kv.Value))
             .OrderBy(i => i.ItemId)
@@ -239,6 +251,7 @@ public sealed unsafe class Collector : IDisposable
         if (key == sentRetainers) return;
         sentRetainers = key;
         sender.Queue(p => p.Retainers = list);
+        Plugin.Log.Debug($"Servants : {list.Count}");
     }
 
     private void ReadInventory()
@@ -249,6 +262,7 @@ public sealed unsafe class Collector : IDisposable
         if (key == sentInventory) return;
         sentInventory = key;
         sender.Queue(p => p.Inventory = items);
+        Plugin.Log.Debug($"Inventaire : {items.Count} objets différents");
     }
 
     private void ReadJobLevels()
@@ -265,6 +279,7 @@ public sealed unsafe class Collector : IDisposable
         if (key == sentLevels) return;
         sentLevels = key;
         sender.Queue(p => p.JobLevels = levels);
+        Plugin.Log.Debug($"Niveaux : {string.Join(", ", levels.Select(kv => $"{kv.Key}={kv.Value}"))}");
     }
 
     /// <summary>« … a été vendu … » : message du canal des ventes de servants.</summary>
