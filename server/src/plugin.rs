@@ -690,7 +690,15 @@ pub async fn pluginmaster(State(server): State<Arc<Server>>, headers: HeaderMap)
     let Ok(Value::Object(mut manifest)) = serde_json::from_str::<Value>(&text) else {
         return (StatusCode::INTERNAL_SERVER_ERROR, "manifeste illisible").into_response();
     };
-    let zip = format!("{}/plugin/latest.zip", base_url(&headers));
+    // L'URL change à chaque version : un cache (Cloudflare…) ne peut pas
+    // servir l'ancien zip avec le nouveau manifeste (Dalamud refuse alors
+    // l'installation).
+    let version = manifest
+        .get("AssemblyVersion")
+        .and_then(Value::as_str)
+        .unwrap_or("0")
+        .to_string();
+    let zip = format!("{}/plugin/latest.zip?v={version}", base_url(&headers));
     let updated = std::fs::metadata(dir.join("latest.zip"))
         .and_then(|m| m.modified())
         .ok()
@@ -708,10 +716,26 @@ pub async fn pluginmaster(State(server): State<Arc<Server>>, headers: HeaderMap)
         manifest.insert(k.into(), v);
     }
     (
-        [(header::CACHE_CONTROL, "no-cache")],
+        [(header::CACHE_CONTROL, "no-store")],
         Json(Value::Array(vec![Value::Object(manifest)])),
     )
         .into_response()
+}
+
+/// `GET /plugin/latest.zip` : jamais en cache (proxy, CDN), sinon un ancien
+/// zip peut être servi avec le nouveau manifeste.
+pub async fn zip(State(server): State<Arc<Server>>) -> Response {
+    match tokio::fs::read(server.web_dir.join("plugin").join("latest.zip")).await {
+        Ok(bytes) => (
+            [
+                (header::CONTENT_TYPE, "application/zip"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, "plugin absent de cette image").into_response(),
+    }
 }
 
 #[cfg(test)]

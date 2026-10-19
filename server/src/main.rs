@@ -150,6 +150,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .route("/api/plugin/tokens/revoke", post(plugin::revoke_token))
         .route("/plugin/pluginmaster.json", get(plugin::pluginmaster))
+        .route("/plugin/latest.zip", get(plugin::zip))
         .fallback_service(ServeDir::new(&web_dir).fallback(ServeFile::new(index)))
         .layer(CompressionLayer::new())
         .with_state(server);
