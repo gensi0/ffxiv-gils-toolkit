@@ -8,3 +8,4 @@ server/target
 server/data
 plugin/**/bin
 plugin/**/obj
+plugin/**/packages.lock.json
