@@ -116,7 +116,7 @@ Accueil, Mes ventes, Liste de courses, Journal et Réglages.
 
 ## Plugin Dalamud
 
-Le plugin `plugin/GilsToolkit` (C#, Dalamud API 14) lit en jeu, sans rien
+Le plugin `plugin/GilsToolkit` (C#, Dalamud API 15) lit en jeu, sans rien
 automatiser ni rien envoyer au jeu :
 
 - les annonces du servant appelé à la sonnette (prix exacts, modifications de
