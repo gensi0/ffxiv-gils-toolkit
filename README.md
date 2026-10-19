@@ -114,6 +114,30 @@ Puis Paramètres → Compte → Notifications sur cet appareil → **Activer** (
 sur chaque appareil). Sur téléphone, l'app s'ouvre en **mode compagnon** :
 Accueil, Mes ventes, Liste de courses, Journal et Réglages.
 
+## Plugin Dalamud
+
+Le plugin `plugin/GilsToolkit` (C#, Dalamud API 14) lit en jeu, sans rien
+automatiser ni rien envoyer au jeu :
+
+- les annonces du servant appelé à la sonnette (prix exacts, modifications de
+  prix vues tout de suite) et son inventaire ;
+- les messages de vente des servants (canal « RetainerSale ») : vente notée tout
+  de suite avec le prix de l'annonce ;
+- les achats à l'HV : ajoutés au stock, taxe comprise ;
+- l'inventaire et les monnaies (quantités affichées dans Monnaies), la liste des
+  servants (ajoutés à Mes ventes) et les niveaux d'artisan/récolteur.
+
+Il est construit dans l'image Docker et servi comme dépôt Dalamud :
+`https://<serveur>/plugin/pluginmaster.json`. Installation : Paramètres → Plugin
+Dalamud dans l'app (ajout du dépôt dans `/xlsettings`, jeton à coller dans
+`/gils`). Le plugin envoie `POST /api/plugin/sync` avec
+`Authorization: Bearer <jeton>` ; les événements non reçus sont gardés sur disque
+et renvoyés, le serveur ignore les doublons.
+
+Compiler : .NET 10, `DALAMUD_HOME` pointant vers les fichiers de développement
+de Dalamud (`https://goatcorp.github.io/dalamud-distrib/latest.zip`), puis
+`dotnet build plugin/GilsToolkit -c Release`.
+
 ## Développer
 
 Prérequis : [Rust](https://rustup.rs) (stable), Node.js 22+, pnpm.
@@ -151,7 +175,9 @@ Organisation du code :
 
 ## Versions
 
-Mettre à jour la version dans `package.json` et `server/Cargo.toml`, puis :
+Mettre à jour la version dans `package.json` et `server/Cargo.toml` (et
+`plugin/GilsToolkit/GilsToolkit.csproj` si le plugin change, pour que Dalamud
+propose la mise à jour), puis :
 
 ```sh
 git tag vX.Y.Z && git push origin vX.Y.Z

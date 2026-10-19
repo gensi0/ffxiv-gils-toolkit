@@ -1,0 +1,10 @@
+{
+  "Author": "gensi0",
+  "Name": "Gils Toolkit",
+  "InternalName": "GilsToolkit",
+  "Punchline": "Synchronise tes servants, ventes et monnaies avec ton serveur FFXIV Gils Toolkit.",
+  "Description": "Lecture seule : le plugin lit les annonces de tes servants (quand tu les ouvres), les messages de vente, tes achats à l'hôtel des ventes, tes monnaies, ton inventaire et tes niveaux d'artisan/récolteur, et les envoie à ton serveur FFXIV Gils Toolkit. Il n'automatise rien et n'envoie rien au jeu.",
+  "Tags": ["market", "retainer", "hôtel des ventes", "servants"],
+  "RepoUrl": "https://github.com/gensi0/ffxiv-gils-toolkit",
+  "ApplicableVersion": "any"
+}

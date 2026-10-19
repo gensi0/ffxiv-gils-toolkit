@@ -5,5 +5,7 @@ dist
 src-tauri/target
 src-tauri/gen
 server/target
+plugin/**/bin
+plugin/**/obj
 **/*.jks
 **/keystore.properties

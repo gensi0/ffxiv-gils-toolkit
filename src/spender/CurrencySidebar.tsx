@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { ItemIcon } from "@/components/market";
 import { CATEGORY_LABEL, type Category, type Currency } from "@/spender/api";
 import { cn } from "@/lib/utils";
+import { usePluginStatus } from "@/lib/queries";
 
 const ORDER: Category[] = [
   "assignats",
@@ -19,6 +20,8 @@ export function CurrencySidebar(props: {
   selected: number | null;
   onSelect: (id: number) => void;
 }) {
+  // Quantités possédées, si le plugin Dalamud est installé.
+  const owned = usePluginStatus().data?.owned;
   const groups = useMemo(
     () =>
       ORDER.map((cat) => ({
@@ -49,7 +52,24 @@ export function CurrencySidebar(props: {
             >
               <ItemIcon path={c.icon} className="size-4" />
               <span className="truncate">{c.name}</span>
-              <span className="ml-auto text-[10px] tabular-nums opacity-60">{c.itemCount}</span>
+              {owned ? (
+                <span
+                  className={cn(
+                    "ml-auto text-[10px] tabular-nums",
+                    (owned[String(c.itemId)] ?? 0) > 0 ? "text-foreground" : "opacity-40",
+                  )}
+                  title="Quantité possédée (plugin)"
+                >
+                  {(owned[String(c.itemId)] ?? 0).toLocaleString("fr-FR")}
+                </span>
+              ) : (
+                <span
+                  className="ml-auto text-[10px] tabular-nums opacity-60"
+                  title="Objets revendables"
+                >
+                  {c.itemCount}
+                </span>
+              )}
             </button>
           ))}
         </section>

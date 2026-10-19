@@ -91,6 +91,26 @@ pub struct AppState {
     pub data_dir: PathBuf,
 }
 
+/// État d'un compte pour les tests (base en mémoire, sans tâches de fond).
+#[cfg(test)]
+pub fn test_state(db: SqlitePool) -> AppState {
+    let http = reqwest::Client::new();
+    AppState {
+        user_id: 1,
+        universalis: universalis::Universalis::new(net::Throttled::new(http.clone()), db.clone()),
+        xivapi: xivapi::XivApi::new(
+            http,
+            db.clone(),
+            std::env::temp_dir().join("gils-test-icons"),
+        ),
+        scans: scan::ScanManager::default(),
+        watch: watch::WatchManager::new().0,
+        ventes: ventes::Runtime::default(),
+        data_dir: std::env::temp_dir(),
+        db,
+    }
+}
+
 pub struct UserApp {
     username: String,
     shared: Arc<Shared>,

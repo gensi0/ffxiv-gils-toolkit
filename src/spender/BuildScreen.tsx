@@ -28,7 +28,7 @@ export function BuildScreen() {
         <h1 className="text-base font-semibold">Préparation des données du jeu</h1>
         <p className="text-xs text-muted-foreground">
           L'application récupère une fois la liste des marchands, de leurs échanges et des objets
-          revendables. Les données sont ensuite gardées sur ton ordinateur.
+          revendables. Les données sont ensuite gardées sur le serveur, pour tous les comptes.
         </p>
         {build.isPending ? (
           <div className="flex flex-col gap-2">

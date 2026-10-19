@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { listen } from "@/lib/backend";
+import { IS_TAURI, listen } from "@/lib/backend";
 import {
   api,
   EVENTS,
@@ -78,6 +78,14 @@ export const useScanCandidates = (scanId: string | null) =>
     ...SHORT,
   });
 
+export const usePluginStatus = () =>
+  useQuery({
+    queryKey: ["plugin"],
+    queryFn: api.pluginStatus,
+    enabled: !IS_TAURI,
+    staleTime: 60_000,
+  });
+
 export const useVentes = () =>
   useQuery({ queryKey: ["ventes", "overview"], queryFn: api.ventesOverview, ...SHORT });
 
@@ -128,6 +136,12 @@ export function useBackendEvents() {
         );
       }),
       // Nouveau relevé de mes ventes : annonces, ventes détectées, stock.
+      // Données du plugin : quantités possédées, et servants/niveaux reportés
+      // dans les paramètres.
+      listen(EVENTS.pluginUpdate, () => {
+        void qc.invalidateQueries({ queryKey: ["plugin"] });
+        void qc.invalidateQueries({ queryKey: ["settings"] });
+      }),
       listen(EVENTS.ventesUpdate, () => {
         void qc.invalidateQueries({ queryKey: ["ventes"] });
       }),
