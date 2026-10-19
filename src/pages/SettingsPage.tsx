@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { IS_MOBILE } from "@/lib/compact";
 import { IS_TAURI } from "@/lib/backend";
 import { AccountSection } from "@/components/AccountSection";
+import { PluginSection } from "@/components/PluginSection";
 import { useAppInfo, useSaveSettings, useSettings, useTaxRates, useWorlds } from "@/lib/queries";
 
 export function SettingsPage({ firstLaunch = false }: { firstLaunch?: boolean }) {
@@ -509,6 +510,7 @@ function SettingsForm(props: { initial: Settings; worlds: World[]; firstLaunch: 
           </div>
 
           {!firstLaunch && !IS_TAURI && <AccountSection />}
+          {!firstLaunch && !IS_TAURI && <PluginSection />}
           {!firstLaunch && <About />}
         </div>
       </form>

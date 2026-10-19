@@ -29,7 +29,7 @@ use crate::{scan, scope, worlds, AppState};
 
 pub const EVENT_VENTES_UPDATE: &str = "ventes-update";
 const POLL_EVERY: Duration = Duration::from_secs(180);
-const HISTORY_WINDOW: Duration = Duration::from_secs(3 * 24 * 3600);
+pub(crate) const HISTORY_WINDOW: Duration = Duration::from_secs(3 * 24 * 3600);
 /// Tolérance sur les horodatages pour rapprocher une annonce et une vente.
 const MATCH_SLACK_MS: i64 = 10 * 60 * 1000;
 /// Un relevé Universalis de moins d'une minute est réutilisé.
@@ -236,30 +236,31 @@ pub struct Journal {
 // ---------- base de données ----------
 
 #[derive(sqlx::FromRow)]
-struct ListingRow {
-    listing_id: String,
-    item_id: i64,
-    hq: bool,
-    price: i64,
-    quantity: i64,
-    retainer: String,
-    first_seen: i64,
-    last_seen: i64,
-    status: String,
-    expected_price: Option<i64>,
-    undercut_price: Option<i64>,
-    undercut_notified_price: Option<i64>,
-    rank: Option<i64>,
-    listing_count: Option<i64>,
-    cheapest_other: Option<i64>,
+pub(crate) struct ListingRow {
+    pub(crate) listing_id: String,
+    pub(crate) item_id: i64,
+    pub(crate) hq: bool,
+    pub(crate) price: i64,
+    pub(crate) quantity: i64,
+    pub(crate) retainer: String,
+    pub(crate) first_seen: i64,
+    pub(crate) last_seen: i64,
+    pub(crate) status: String,
+    pub(crate) expected_price: Option<i64>,
+    pub(crate) undercut_price: Option<i64>,
+    pub(crate) undercut_notified_price: Option<i64>,
+    pub(crate) rank: Option<i64>,
+    pub(crate) listing_count: Option<i64>,
+    pub(crate) cheapest_other: Option<i64>,
 }
 
-const LISTING_COLUMNS: &str = "listing_id, item_id, hq, price, quantity, retainer, first_seen,
+pub(crate) const LISTING_COLUMNS: &str =
+    "listing_id, item_id, hq, price, quantity, retainer, first_seen,
     last_seen, status, expected_price, undercut_price, undercut_notified_price, rank,
     listing_count, cheapest_other";
 
 impl ListingRow {
-    fn known(&self) -> Known {
+    pub(crate) fn known(&self) -> Known {
         Known {
             listing_id: self.listing_id.clone(),
             hq: self.hq,
@@ -287,7 +288,7 @@ async fn tracked_ids(db: &SqlitePool) -> AppResult<Vec<u32>> {
 /// Enregistre une vente et consomme le stock correspondant (même qualité
 /// d'abord, puis l'autre).
 #[allow(clippy::too_many_arguments)]
-async fn record_sale(
+pub(crate) async fn record_sale(
     db: &SqlitePool,
     item_id: u32,
     hq: bool,
@@ -373,7 +374,13 @@ async fn upsert_mine(
             continue;
         };
         if !known_ids.contains(id) {
-            fresh.push((l.hq, i64::from(l.quantity)));
+            // Annonce déjà vue en jeu par le plugin : elle prend son
+            // identifiant Universalis au lieu d'être comptée deux fois.
+            if let Some(old) = adopt_plugin_listing(db, item_id, l, id).await? {
+                seen.insert(old);
+            } else {
+                fresh.push((l.hq, i64::from(l.quantity)));
+            }
         }
         seen.insert(id.to_string());
         sqlx::query(
@@ -400,6 +407,51 @@ async fn upsert_mine(
         .await?;
     }
     Ok((seen, fresh))
+}
+
+/// Donne à une annonce relevée par le plugin (`plugin:…`) l'identifiant
+/// Universalis de la même annonce. Renvoie l'ancien identifiant.
+async fn adopt_plugin_listing(
+    db: &SqlitePool,
+    item_id: u32,
+    l: &crate::universalis::Listing,
+    id: &str,
+) -> AppResult<Option<String>> {
+    let old: Option<String> = sqlx::query_scalar(
+        "SELECT listing_id FROM my_listings
+         WHERE listing_id LIKE 'plugin:%' AND status = 'active' AND item_id = ? AND hq = ?
+           AND quantity = ? AND lower(retainer) = lower(?)
+         ORDER BY (price = ?) DESC, first_seen ASC LIMIT 1",
+    )
+    .bind(i64::from(item_id))
+    .bind(l.hq)
+    .bind(i64::from(l.quantity))
+    .bind(l.retainer_name.as_deref().unwrap_or_default())
+    .bind(l.price_per_unit as i64)
+    .fetch_optional(db)
+    .await?;
+    let Some(old) = old else {
+        return Ok(None);
+    };
+    // Si l'identifiant existe déjà (annonce plus ancienne), on garde celle-ci.
+    let taken: Option<String> =
+        sqlx::query_scalar("SELECT listing_id FROM my_listings WHERE listing_id = ?")
+            .bind(id)
+            .fetch_optional(db)
+            .await?;
+    if taken.is_some() {
+        sqlx::query("DELETE FROM my_listings WHERE listing_id = ?")
+            .bind(&old)
+            .execute(db)
+            .await?;
+    } else {
+        sqlx::query("UPDATE my_listings SET listing_id = ? WHERE listing_id = ?")
+            .bind(id)
+            .bind(&old)
+            .execute(db)
+            .await?;
+    }
+    Ok(Some(old))
 }
 
 /// Met à jour rang et concurrence de mes annonces actives d'un objet.
@@ -535,7 +587,12 @@ async fn process_item(
     update_ranks(app, db, ctx, item_id, market, true).await
 }
 
-async fn close(db: &SqlitePool, listing_id: &str, status: &str, at: i64) -> AppResult<()> {
+pub(crate) async fn close(
+    db: &SqlitePool,
+    listing_id: &str,
+    status: &str,
+    at: i64,
+) -> AppResult<()> {
     sqlx::query("UPDATE my_listings SET status = ?, closed_at = ? WHERE listing_id = ?")
         .bind(status)
         .bind(at)
@@ -985,7 +1042,7 @@ pub async fn add_sale(
     .await
 }
 
-async fn current_tax(state: &AppState) -> f64 {
+pub(crate) async fn current_tax(state: &AppState) -> f64 {
     let Ok(settings) = settings::load(&state.db).await else {
         return 0.05;
     };

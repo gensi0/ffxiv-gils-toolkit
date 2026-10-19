@@ -62,6 +62,23 @@ jobs:
       - run: cargo clippy --manifest-path server/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path server/Cargo.toml
 
+  plugin:
+    runs-on: ubuntu-latest
+    env:
+      DALAMUD_HOME: ${{ github.workspace }}/dalamud/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Dalamud (fichiers de développement)
+        run: |
+          mkdir -p dalamud
+          curl -fsSL https://goatcorp.github.io/dalamud-distrib/latest.zip -o dalamud.zip
+          unzip -q dalamud.zip -d dalamud
+      - run: dotnet build plugin/GilsToolkit/GilsToolkit.csproj -c Release -warnaserror
+      - run: test -f plugin/GilsToolkit/bin/Release/GilsToolkit/latest.zip
+
   docker:
     runs-on: ubuntu-latest
     steps:
@@ -82,6 +99,8 @@ jobs:
           for i in $(seq 1 30); do curl -fs localhost:8080/api/health && break; sleep 1; done
           curl -fs localhost:8080/ | grep -q "FFXIV Gils Toolkit"
           curl -fs localhost:8080/manifest.webmanifest | grep -q standalone
+          curl -fs localhost:8080/plugin/pluginmaster.json | grep -q '"InternalName":"GilsToolkit"'
+          curl -fs -o /dev/null localhost:8080/plugin/latest.zip
           curl -fs -c jar -H content-type:application/json -d '{"username":"ci-user","password":"motdepasse","invite":"ci"}' localhost:8080/api/auth/register
           curl -fs -b jar -X POST localhost:8080/api/cmd/get_settings | grep -q homeWorldId
           docker exec gils ffxiv-gils-server --healthcheck

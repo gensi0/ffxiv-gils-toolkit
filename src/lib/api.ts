@@ -509,10 +509,21 @@ export const EVENTS = {
   watchUpdate: "watch-update",
   wsStatus: "ws-status",
   ventesUpdate: "ventes-update",
+  pluginUpdate: "plugin-update",
   craftProgress: "craft-progress",
 } as const;
 
+/** Données reçues du plugin Dalamud (client web uniquement). */
+export interface PluginStatus {
+  character: { name: string; homeWorldId: number; currentWorldId: number } | null;
+  updatedAt: number | null;
+  /** Quantité possédée par objet (inventaire + servants ouverts). */
+  owned: Record<string, number>;
+  retainers: { retainerId: number; name: string; marketItemCount: number }[];
+}
+
 export const api = {
+  pluginStatus: () => invoke<PluginStatus>("plugin_status"),
   listWorlds: () => invoke<World[]>("list_worlds"),
   craftAnalyze: (options: CraftOptions) => invoke<CraftResults>("craft_analyze", { options }),
   craftLast: () => invoke<CraftResults | null>("craft_last"),

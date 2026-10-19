@@ -13,6 +13,19 @@ COPY public public
 COPY src src
 RUN pnpm exec vite build --outDir /web
 
+# --- Plugin Dalamud (servi comme dépôt personnalisé : /plugin/pluginmaster.json)
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS plugin
+WORKDIR /src
+ENV DALAMUD_HOME=/dalamud/ DOTNET_CLI_TELEMETRY_OPTOUT=1
+RUN apt-get update && apt-get install -y --no-install-recommends unzip curl \
+    && mkdir -p /dalamud \
+    && curl -fsSL https://goatcorp.github.io/dalamud-distrib/latest.zip -o /tmp/dalamud.zip \
+    && unzip -q /tmp/dalamud.zip -d /dalamud && rm /tmp/dalamud.zip
+COPY plugin plugin
+RUN dotnet build plugin/GilsToolkit/GilsToolkit.csproj -c Release \
+    && mkdir -p /out \
+    && cp plugin/GilsToolkit/bin/Release/GilsToolkit/latest.zip plugin/GilsToolkit/bin/Release/GilsToolkit/GilsToolkit.json /out/
+
 # --- Serveur ------------------------------------------------------------------
 FROM rust:1-bookworm AS server
 WORKDIR /src
@@ -37,6 +50,7 @@ RUN apt-get update \
     && mkdir -p /data && chown gils /data
 COPY --from=server /src/server/target/release/ffxiv-gils-server /usr/local/bin/
 COPY --from=web /web /app/web
+COPY --from=plugin /out /app/web/plugin
 USER gils
 ENV DATA_DIR=/data WEB_DIR=/app/web PORT=8080 RUST_LOG=info,sqlx=warn
 VOLUME /data

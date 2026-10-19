@@ -18,6 +18,7 @@ mod db;
 mod detail;
 mod error;
 mod net;
+mod plugin;
 mod profit;
 mod push;
 mod results;
@@ -52,6 +53,7 @@ use auth::{ApiError, User};
 
 pub struct Server {
     pub shared: Arc<app::Shared>,
+    pub web_dir: PathBuf,
     pub invite_code: Option<String>,
     pub cookie_secure: bool,
 }
@@ -103,6 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shared = app::Shared::new(data_dir.clone(), accounts.clone()).await?;
     let server = Arc::new(Server {
         shared: shared.clone(),
+        web_dir: web_dir.clone(),
         invite_code: std::env::var("INVITE_CODE")
             .ok()
             .map(|c| c.trim().to_string())
@@ -139,6 +142,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/push/unsubscribe", post(push_unsubscribe))
         .route("/api/push/test", post(push_test))
         .route("/api/health", get(|| async { "ok" }))
+        .route("/api/plugin/ping", get(plugin::ping))
+        .route("/api/plugin/sync", post(plugin::sync))
+        .route(
+            "/api/plugin/tokens",
+            get(plugin::list_tokens).post(plugin::create_token),
+        )
+        .route("/api/plugin/tokens/revoke", post(plugin::revoke_token))
+        .route("/plugin/pluginmaster.json", get(plugin::pluginmaster))
         .fallback_service(ServeDir::new(&web_dir).fallback(ServeFile::new(index)))
         .layer(CompressionLayer::new())
         .with_state(server);
@@ -169,6 +180,7 @@ async fn command(
     let res = match name.as_str() {
         "kv_get" => kv_get(&app, input).await,
         "kv_set" => kv_set(&app, input).await,
+        "plugin_status" => plugin::status(&app).await,
         _ => rpc::dispatch(&app, &name, input).await,
     };
     res.map(Json)
