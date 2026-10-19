@@ -806,7 +806,7 @@ dependencies = [
 
 [[package]]
 name = "ffxiv-gils-server"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "argon2",
  "axum",
