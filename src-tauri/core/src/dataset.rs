@@ -25,7 +25,7 @@ use crate::xivapi::{icon_path, FieldsExt, Row, XivApi};
 use crate::Result;
 
 /// À incrémenter quand le format change : un fichier plus ancien est reconstruit.
-pub const DATASET_VERSION: u32 = 5;
+pub const DATASET_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -165,6 +165,22 @@ const VARIANT: &[u32] = &[
     41078, 41079, 41080, // île d'Aloalo
     50434, 50847, 49125, // corvosien
 ];
+/// Premier identifiant de la feuille `Quest` : en dessous, le champ « quête »
+/// d'une boutique de gemmes est un rang d'ALÉA.
+const FIRST_QUEST: u32 = 65536;
+
+/// Marchands de gemmes bicolores de Shadowbringers → boutique : Cristarium,
+/// Eulmore, Grand-Lac, Kholusia, Amh Araeng, Il Mheg, Rak'tika, la Tempête.
+const SHB_GEMSTONE_SHOPS: &[(u32, u32)] = &[
+    (1027998, 1769957),
+    (1027538, 1769958),
+    (1027385, 1769959),
+    (1027497, 1769960),
+    (1027892, 1769961),
+    (1027665, 1769962),
+    (1027709, 1769963),
+    (1027766, 1769964),
+];
 /// Sceaux de grande compagnie : Maelstrom (1), Deux Vipères (2), Immortels (3).
 const GC_SEALS: [(u32, u32); 3] = [(1, 20), (2, 21), (3, 22)];
 
@@ -207,6 +223,9 @@ pub struct Links {
     pub inclusion_category: HashMap<u32, u32>,
     pub inclusion_series: HashMap<u32, Vec<u32>>,
     pub custom_talk: HashMap<u32, Vec<u32>>,
+    /// Marchands de gemmes bicolores (boutiques d'ALÉA) → boutiques. La
+    /// feuille `FateShop` est indexée par marchand (Endwalker, Dawntrail).
+    pub fate_shop: HashMap<u32, Vec<u32>>,
     /// Boutique de sceaux → grande compagnie.
     pub gc_shop: HashMap<u32, u32>,
 }
@@ -279,6 +298,11 @@ impl Links {
                 for s in &found {
                     out.entry(*s).or_default().insert(*npc);
                 }
+            }
+        }
+        for (npc, list) in &self.fate_shop {
+            for s in list.iter().filter(|s| shops.contains(s)) {
+                out.entry(*s).or_default().insert(*npc);
             }
         }
         out
@@ -615,6 +639,17 @@ pub async fn build(http: &Http, progress: &(dyn Fn(Progress) + Sync)) -> Result<
             links.custom_talk.insert(r.row_id, args);
         }
     }
+    for r in api.sheet("FateShop", "SpecialShop@as(raw)").await? {
+        let list = nonzero(r.fields.u32s_of("SpecialShop@as(raw)"));
+        if r.row_id != 0 && !list.is_empty() {
+            links.fate_shop.insert(r.row_id, list);
+        }
+    }
+    // Shadowbringers : le dialogue des marchands ne donne pas leurs boutiques
+    // (indices de récompense) ; correspondance relevée dans les données du jeu.
+    for &(npc, shop) in SHB_GEMSTONE_SHOPS {
+        links.fate_shop.entry(npc).or_default().push(shop);
+    }
     for r in api.sheet("GCShop", "GrandCompany@as(raw)").await? {
         links
             .gc_shop
@@ -847,7 +882,7 @@ pub async fn build(http: &Http, progress: &(dyn Fn(Progress) + Sync)) -> Result<
         .iter()
         .map(|o| o.quest)
         .chain(raw_gil.iter().map(|g| g.quest))
-        .filter(|&q| q != 0)
+        .filter(|&q| q >= FIRST_QUEST)
         .collect();
     quest_ids.sort_unstable();
     quest_ids.dedup();
@@ -875,7 +910,10 @@ pub async fn build(http: &Http, progress: &(dyn Fn(Progress) + Sync)) -> Result<
         .into_iter()
         .map(|o| {
             let tribe = category_of.get(&o.currency) == Some(&Category::TribusAlliees);
-            let reason = if o.quest != 0 {
+            let reason = if o.quest != 0 && o.quest < FIRST_QUEST {
+                // Boutiques de gemmes : index de récompense d'ALÉA, pas une quête.
+                Some("Rang d'ALÉA requis dans la zone".into())
+            } else if o.quest != 0 {
                 quests.get(&o.quest).map(|q| format!("Quête : {q}"))
             } else if o.achievement != 0 {
                 achievements
@@ -1107,6 +1145,24 @@ mod tests {
             (5057, 41784, 25)
         );
         assert_eq!(offers[0].vendors, BTreeSet::from([1000001]));
+    }
+
+    #[test]
+    fn gemstone_traders_are_found_through_fate_shops() {
+        let shops = vec![shop(1770470, 4, vec![sale(5057, 26807, 3)])];
+        let links = Links {
+            fate_shop: HashMap::from([(1037055, vec![1770470])]),
+            ..Default::default()
+        };
+        let offers = special_shop_offers(
+            &shops,
+            &links,
+            &tomes(),
+            &HashSet::from([26807]),
+            &HashSet::from([5057]),
+        );
+        assert_eq!(offers.len(), 1);
+        assert_eq!(offers[0].vendors, BTreeSet::from([1037055]));
     }
 
     #[test]
