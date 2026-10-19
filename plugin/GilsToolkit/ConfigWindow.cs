@@ -62,6 +62,7 @@ public sealed class ConfigWindow : Window
         if (testResult != null) ImGui.TextWrapped(testResult);
 
         ImGui.Separator();
+        ImGui.TextDisabled($"Version {typeof(Plugin).Assembly.GetName().Version?.ToString(3)} · monnaies hors inventaire lues : {(Collector.LastCurrencyCount < 0 ? "pas encore" : Collector.LastCurrencyCount.ToString())}");
         var s = plugin.Sender;
         ImGui.Text(s.LastSuccess is { } ok ? $"Dernier envoi : {ok:HH:mm:ss}" : "Aucun envoi pour l'instant.");
         if (s.LastSummary.Length > 0) ImGui.TextDisabled(s.LastSummary);
