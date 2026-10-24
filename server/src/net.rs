@@ -154,7 +154,11 @@ impl std::fmt::Display for Retry {
 impl From<Retry> for AppError {
     fn from(r: Retry) -> Self {
         match r {
-            Retry::Status(s) => AppError::Other(format!("Universalis returned HTTP {s}")),
+            Retry::Status(s) if s == StatusCode::TOO_MANY_REQUESTS => AppError::Other(
+                "Universalis limite le nombre de requêtes (HTTP 429) : réessaie dans une minute"
+                    .into(),
+            ),
+            Retry::Status(s) => AppError::Other(format!("Universalis indisponible (HTTP {s})")),
             Retry::Transport(e) => AppError::Http(e),
         }
     }

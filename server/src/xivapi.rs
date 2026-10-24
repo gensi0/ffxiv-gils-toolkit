@@ -228,6 +228,10 @@ fn fallback_items() -> &'static HashMap<u32, ItemRow> {
 }
 
 /// Icon paths look like `ui/icon/020000/020801_hr1.tex`.
+/// Téléchargements d'icônes simultanés vers XIVAPI (les icônes en cache disque
+/// ne passent pas par là).
+static ICON_DOWNLOADS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
+
 pub fn is_valid_icon_path(path: &str) -> bool {
     path.starts_with("ui/icon/")
         && path.ends_with(".tex")
@@ -424,6 +428,15 @@ impl XivApi {
         let file = self
             .icon_dir
             .join(format!("{}.png", path.replace('/', "_")));
+        if let Ok(bytes) = tokio::fs::read(&file).await {
+            return Ok(bytes);
+        }
+        // Une page affiche des centaines d'icônes : téléchargements limités à
+        // quelques-uns en parallèle pour ne pas saturer XIVAPI.
+        let _slot = ICON_DOWNLOADS
+            .acquire()
+            .await
+            .expect("sémaphore jamais fermé");
         if let Ok(bytes) = tokio::fs::read(&file).await {
             return Ok(bytes);
         }

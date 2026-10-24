@@ -14,6 +14,8 @@ use crate::net::{self, CachePolicy, Throttled};
 
 const BASE: &str = "https://universalis.app/api/v2";
 pub const MAX_IDS_PER_REQUEST: usize = 100;
+/// Relevé complet des annonces : partagé entre comptes pendant 25 minutes.
+const LISTINGS_LIGHT_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(25 * 60);
 
 pub const TTL_MARKET: Duration = Duration::from_secs(10 * 60);
 pub const TTL_HISTORY: Duration = Duration::from_secs(60 * 60);
@@ -272,7 +274,11 @@ impl Universalis {
             &format!("/{world}/{}", ids_csv(ids)),
             &[("entries", "0".to_string()), ("fields", fields)],
         )?;
-        let body = self.net.get_text(&url).await?;
+        // Cache partagé : deux comptes sur le même serveur principal ne font
+        // qu'un relevé complet.
+        let body = self
+            .get(&url, CachePolicy::MaxAge(LISTINGS_LIGHT_MAX_AGE))
+            .await?;
         parse_per_item(&body, ids)
     }
 
