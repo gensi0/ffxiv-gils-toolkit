@@ -473,7 +473,7 @@ export function VentesPage() {
           </TooltipTrigger>
           <TooltipContent className="max-w-64">
             Parcourt tout le marché de ton serveur (environ une minute). Fait automatiquement toutes
-            les 30 minutes
+            les 2 heures (12 heures si le plugin Dalamud envoie tes annonces)
             {d?.lastDiscoveryMs != null ? ` ; dernière recherche ${ago(d.lastDiscoveryMs)}` : ""}.
           </TooltipContent>
         </Tooltip>

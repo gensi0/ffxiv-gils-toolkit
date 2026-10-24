@@ -97,7 +97,7 @@ schéma que l'app de bureau), `shared.db` (caches Universalis et XIVAPI communs)
 `docker compose exec gils-toolkit ffxiv-gils-server --backup /data/backup`.
 
 Le serveur fait tourner en continu, pour chaque compte, le suivi de Mes ventes
-(relevé toutes les 3 min, relevé complet du serveur toutes les 30 min, WebSocket
+(relevé toutes les 3 min, relevé complet du serveur toutes les 2 h, 12 h avec le plugin, partagé entre comptes du même serveur, WebSocket
 Universalis) et les scans programmés. Les requêtes Universalis de tous les
 comptes partagent le même cache et la même limite de débit.
 

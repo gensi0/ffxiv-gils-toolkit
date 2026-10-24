@@ -54,8 +54,15 @@ impl Runtime {
 
 /// Délai laissé à l'API REST d'Universalis pour refléter l'événement.
 const NUDGE_DELAY: Duration = Duration::from_secs(15);
-/// Relevé complet du serveur (tous les objets) pour trouver toutes mes annonces.
-const DISCOVER_EVERY_MS: i64 = 30 * 60 * 1000;
+/// Relevé complet du serveur (tous les objets, ~170 requêtes) pour trouver
+/// toutes mes annonces. Le suivi toutes les 3 minutes couvre les annonces déjà
+/// connues : le relevé complet ne sert qu'à trouver les nouvelles.
+const DISCOVER_EVERY_MS: i64 = 2 * 3600 * 1000;
+/// Avec le plugin Dalamud, les annonces arrivent du jeu : relevé complet de
+/// secours seulement.
+const DISCOVER_EVERY_WITH_PLUGIN_MS: i64 = 12 * 3600 * 1000;
+/// Le plugin compte comme actif s'il a envoyé des annonces depuis 3 jours.
+const PLUGIN_FRESH_MS: i64 = 3 * 24 * 3600 * 1000;
 const DISCOVER_CHUNK: usize = 100;
 
 // ---------- logique pure (testée sans réseau) ----------
@@ -761,12 +768,27 @@ pub async fn discover(app: &AppHandle) -> AppResult<usize> {
     Ok(found)
 }
 
+/// Intervalle du relevé complet : allongé quand le plugin envoie les annonces.
+async fn discover_every(db: &SqlitePool) -> i64 {
+    let last: Option<i64> = sqlx::query_scalar(
+        "SELECT MAX(updated_at) FROM plugin_state WHERE key LIKE 'retainer_market:%'",
+    )
+    .fetch_one(db)
+    .await
+    .unwrap_or(None);
+    match last {
+        Some(t) if now_ms() - t < PLUGIN_FRESH_MS => DISCOVER_EVERY_WITH_PLUGIN_MS,
+        _ => DISCOVER_EVERY_MS,
+    }
+}
+
 /// Boucle de fond : un relevé toutes les 3 minutes, un relevé complet toutes
-/// les 30 minutes.
+/// les 2 heures (12 avec le plugin).
 pub async fn run(app: AppHandle) {
     let state = app.state::<AppState>();
     loop {
-        if now_ms() - state.ventes.last_discovery_ms.load(Ordering::Relaxed) >= DISCOVER_EVERY_MS
+        let every = discover_every(&state.db).await;
+        if now_ms() - state.ventes.last_discovery_ms.load(Ordering::Relaxed) >= every
             && !state.ventes.discovering.load(Ordering::Relaxed)
         {
             match discover(&app).await {
